@@ -21,23 +21,30 @@ import (
 )
 
 const (
+	// DefaultRegion is the default AWS region to use for cloudwatchlogs.
 	DefaultRegion           string = "ap-southeast-2"
+	// DefaultTagNameLogGroup is the default tag used to specify the logGroup.
 	DefaultTagNameLogGroup  string = "edge.skpr.io/loggroup"
+	// DefaultTagNameLogStream is the default tag used to specify the logStream.
 	DefaultTagNameLogStream string = "edge.skpr.io/logstream"
-	DefaultVerbosity	    string = "debug"
+	// DefaultVerbosity is the default logging verbosity of the app.
+	DefaultVerbosity	    string = "info"
 )
 
 type cmdWatch struct {
+	// Verbosity defines the log level.
+	Verbosity string
 	// Region defines the cloudwatch region.
 	Region string
-
+	// TagNameLogGroup defines the tag to use to specify the logGroup.
 	TagNameLogGroup  string
+	// TagNameLogStream defines the tag to use to specify the logStream.
 	TagNameLogStream string
 }
 
 func (cmd *cmdWatch) run(c *kingpin.ParseContext) error {
 	logger := log.NewLogger(os.Stderr).With("region", cmd.Region)
-	_ = logger.SetLevel(DefaultVerbosity)
+	_ = logger.SetLevel(cmd.Verbosity)
 	logger.Debug("initialising")
 
 	config := &aws.Config{
@@ -75,7 +82,7 @@ func (cmd *cmdWatch) run(c *kingpin.ParseContext) error {
 			ClientS3:         clientS3,
 			ClientSQS:        clientSqs,
 			ClientCloudwatch: clientCloudwatch,
-			DistributionId:   item.DistributionSummary.Id,
+			DistributionID:   item.DistributionSummary.Id,
 		}
 		distlogger.Info("candidate distribution found")
 
@@ -138,4 +145,8 @@ func Cmd(app *kingpin.Application) {
 	c.Flag("tag-stream", "Tag name on cloudfront distribution to use for log stream").
 		Default(DefaultTagNameLogStream).
 		StringVar(&cmd.TagNameLogStream)
+	c.Flag("verbosity", "Verbosity level").
+		Default(DefaultVerbosity).
+		HintOptions("panic", "fatal", "error",  "warn", "warning", "info", "debug", "trace").
+		StringVar(&cmd.Verbosity)
 }

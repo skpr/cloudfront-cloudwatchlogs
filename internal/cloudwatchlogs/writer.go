@@ -9,14 +9,21 @@ import (
 	"github.com/prometheus/common/log"
 )
 
+// Writer handles pushing messages to cloudwatchlogs.
 type Writer struct {
+	// Client is the cloudwatchlogs client.
 	Client *cloudwatchlogs.CloudWatchLogs
+	// Logger is the log interface.
 	Logger log.Logger
+	// LogGroup is the name of the logGroup to store cloudfront logs.
 	LogGroup *string
+	// LogStream is the name of the logStream to store cloudfront logs.
 	LogStream *string
+	// SequenceToken stores the sequence token between push requests.
 	SequenceToken *string
 }
 
+// Stream handles pushing messages to cloudwatchlogs.
 func(w *Writer) Stream(ctx context.Context, messages []*cloudwatchlogs.InputLogEvent) error {
 	// 1. If you don't have a valid token or don't have a token at all (you're just starting) describe the stream to find out the token
 	// 2. Push using the token you've got. If the push is successful update the token
@@ -68,7 +75,7 @@ func(w *Writer) Stream(ctx context.Context, messages []*cloudwatchlogs.InputLogE
 	return nil
 }
 
-// EnsureLogGroup
+// EnsureLogGroup creates the logGroup if it doesn't exist.
 func(w *Writer) EnsureLogGroup(ctx context.Context) error {
 	in := &cloudwatchlogs.CreateLogGroupInput{
 		LogGroupName:  w.LogGroup,
@@ -82,7 +89,7 @@ func(w *Writer) EnsureLogGroup(ctx context.Context) error {
 	return nil
 }
 
-// EnsureLogStream
+// EnsureLogStream creates the logGroup and logStream if either doesn'1t exist.
 func(w *Writer) EnsureLogStream(ctx context.Context) error {
 	err := w.EnsureLogGroup(ctx)
 	if err != nil {
@@ -102,6 +109,7 @@ func(w *Writer) EnsureLogStream(ctx context.Context) error {
 	return nil
 }
 
+// UpdateSequenceToken returns an updated sequence token.
 func(w *Writer) UpdateSequenceToken(ctx context.Context) (*string, error) {
 	describeIn := &cloudwatchlogs.DescribeLogStreamsInput{
 		LogGroupName:        w.LogGroup,

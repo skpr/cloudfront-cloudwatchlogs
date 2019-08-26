@@ -23,19 +23,21 @@ import (
 	m "github.com/skpr/cloudfront-cloudwatchlogs/internal/sqs"
 )
 
+// WorkerInput defines parameters for Worker().
 type WorkerInput struct {
 	Logger 			 log.Logger
 	ClientS3         *s3.S3
 	ClientCloudwatch *cloudwatchlogs.CloudWatchLogs
 	ClientSQS *sqs.SQS
 
-	Message          *sqs.Message
-	QueueUrl *string
-	DistributionId *string
+	Message        *sqs.Message
+	QueueURL       *string
+	DistributionID *string
 	LogGroup       *string
 	LogStream      *string
 }
 
+// Worker runs the queue worker.
 func Worker(ctx context.Context, wg *sync.WaitGroup, in WorkerInput) error {
 	defer wg.Done()
 	defer DeleteMessage(ctx, in)
@@ -122,10 +124,11 @@ func Worker(ctx context.Context, wg *sync.WaitGroup, in WorkerInput) error {
 	return nil
 }
 
+// DeleteMessage removes a completes message from the queue.
 func DeleteMessage(ctx context.Context, in WorkerInput) error {
 	in.Logger.Debugf("deleting message from queue: %s", *in.Message.MessageId)
 	delIn := &sqs.DeleteMessageInput{
-		QueueUrl:      in.QueueUrl,
+		QueueUrl:      in.QueueURL,
 		ReceiptHandle: in.Message.ReceiptHandle,
 	}
 	_, err := in.ClientSQS.DeleteMessageWithContext(ctx, delIn)

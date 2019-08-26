@@ -39,12 +39,14 @@ func GetBucketNotificationQueue(client *s3.S3, BucketName *string) (*string, err
 	return notificationConfig.QueueConfigurations[0].QueueArn, nil
 }
 
+// GetDistributionLogQueueInput defines the parameters for GetDistributionLogQueue()
 type GetDistributionLogQueueInput struct {
 	ClientS3         *s3.S3
 	ClientCloudfront *cloudfront.CloudFront
 	Distribution     *cloudfront.DistributionSummary
 }
 
+// GetDistributionLogQueue returns the SQS queue receiving messages when new log files hit the s3 bucket.
 func GetDistributionLogQueue(in *GetDistributionLogQueueInput) (*string, error) {
 	// Look up configured s3 bucket for logs.
 	bucket, err := GetDistributionLogBucket(in.ClientCloudfront, in.Distribution.Id)
@@ -61,6 +63,7 @@ func GetDistributionLogQueue(in *GetDistributionLogQueueInput) (*string, error) 
 	return queue, nil
 }
 
+// DistributionWithTags is a wrapper for a cloudfront distribution and its tags.
 type DistributionWithTags struct {
 	DistributionSummary *cloudfront.DistributionSummary
 	Tags                *cloudfront.Tags

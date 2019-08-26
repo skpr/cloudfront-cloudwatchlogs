@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 )
 
+// Watcher handles a queue.
 type Watcher struct {
 	Wg *sync.WaitGroup
 	Logger 			 log.Logger
@@ -23,11 +24,12 @@ type Watcher struct {
 	ClientCloudwatch *cloudwatchlogs.CloudWatchLogs
 
 	QueueARN       *string
-	DistributionId *string
+	DistributionID *string
 	LogGroup       *string
 	LogStream      *string
 }
 
+// Watch watches a queue for messages and handles incoming log files.
 func (w *Watcher) Watch(ctx context.Context) error {
 	defer w.Wg.Done()
 	defer w.Logger.Debug("watch loop complete")
@@ -37,10 +39,10 @@ func (w *Watcher) Watch(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	getQueueUrlIn := &sqs.GetQueueUrlInput{
+	getQueueURLIn := &sqs.GetQueueUrlInput{
 		QueueName: &queueArn.Resource,
 	}
-	queueUrl, err := w.ClientSQS.GetQueueUrl(getQueueUrlIn)
+	queueURL, err := w.ClientSQS.GetQueueUrl(getQueueURLIn)
 	if err != nil {
 		return err
 	}
@@ -52,7 +54,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 		// Receive messages.
 		receiveMessageIn := &sqs.ReceiveMessageInput{
 			MaxNumberOfMessages: aws.Int64(10),
-			QueueUrl:            queueUrl.QueueUrl,
+			QueueUrl:            queueURL.QueueUrl,
 			WaitTimeSeconds:     aws.Int64(20),
 		}
 		message, err := w.ClientSQS.ReceiveMessage(receiveMessageIn)
@@ -75,9 +77,9 @@ func (w *Watcher) Watch(ctx context.Context) error {
 				ClientSQS: w.ClientSQS,
 				ClientCloudwatch: w.ClientCloudwatch,
 
-				QueueUrl: queueUrl.QueueUrl,
-				Message:          msg,
-				DistributionId: w.DistributionId,
+				QueueURL:       queueURL.QueueUrl,
+				Message:        msg,
+				DistributionID: w.DistributionID,
 				LogGroup:       w.LogGroup,
 				LogStream:      w.LogStream,
 			}
