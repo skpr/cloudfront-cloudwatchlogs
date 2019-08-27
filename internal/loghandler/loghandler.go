@@ -6,6 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -13,11 +20,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/sqs"
 	"github.com/pkg/errors"
 	"github.com/prometheus/common/log"
-	"io"
-	"io/ioutil"
-	"strings"
-	"sync"
-	"time"
 
 	cwl "github.com/skpr/cloudfront-cloudwatchlogs/internal/cloudwatchlogs"
 	m "github.com/skpr/cloudfront-cloudwatchlogs/internal/sqs"
@@ -115,6 +117,14 @@ func Worker(ctx context.Context, wg *sync.WaitGroup, in WorkerInput) error {
 			Timestamp: aws.Int64(aws.TimeUnixMilli(date)),
 		})
 	}
+
+	// Sort the messages chronologically.
+	sort.Slice(messages, func(i, j int) bool {
+		a := *messages[i].Timestamp
+		b := *messages[j].Timestamp
+		return a > b
+	})
+
 	err = logWriter.Stream(ctx, messages)
 	if err != nil {
 		errmsg := "could not push log events to cloudwatch"

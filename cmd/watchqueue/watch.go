@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/pkg/errors"
-	"os"
 	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -13,10 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/sqs"
-	"github.com/prometheus/common/log"
 	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/discovery"
+	l "github.com/skpr/cloudfront-cloudwatchlogs/internal/logger"
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/watcher"
 )
 
@@ -43,7 +42,8 @@ type cmdWatch struct {
 }
 
 func (cmd *cmdWatch) run(c *kingpin.ParseContext) error {
-	logger := log.NewLogger(os.Stderr).With("region", cmd.Region)
+	loggerKeys := map[string]string{"region": cmd.Region}
+	logger := l.NewWithKeys(loggerKeys)
 	_ = logger.SetLevel(cmd.Verbosity)
 	logger.Debug("initialising")
 
@@ -75,7 +75,9 @@ func (cmd *cmdWatch) run(c *kingpin.ParseContext) error {
 
 	watchers := make([]watcher.Watcher, 0)
 	for _, item := range distributions {
-		distlogger := logger.With("distribution", *item.DistributionSummary.Id)
+		loggerKeys["distribution"] = *item.DistributionSummary.Id
+		distlogger := l.NewWithKeys(loggerKeys)
+		_ = distlogger.SetLevel(cmd.Verbosity)
 		w := watcher.Watcher{
 			Logger:           distlogger,
 			Wg:               wg,

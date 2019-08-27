@@ -59,7 +59,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 		}
 		message, err := w.ClientSQS.ReceiveMessage(receiveMessageIn)
 		if err != nil {
-			w.Logger.Debug("polling for messages...")
+			w.Logger.Errorf("did not receive any messages: %s", err.Error())
 			continue
 		}
 		if len(message.Messages) == 0 {
@@ -74,7 +74,7 @@ func (w *Watcher) Watch(ctx context.Context) error {
 			workerIn := loghandler.WorkerInput{
 				Logger:		      messageLogger,
 				ClientS3:         w.ClientS3,
-				ClientSQS: w.ClientSQS,
+				ClientSQS:        w.ClientSQS,
 				ClientCloudwatch: w.ClientCloudwatch,
 
 				QueueURL:       queueURL.QueueUrl,
@@ -85,9 +85,9 @@ func (w *Watcher) Watch(ctx context.Context) error {
 			}
 			go loghandler.Worker(ctx, wg, workerIn)
 		}
-	}
 
-	wg.Wait()
+		wg.Wait()
+	}
 
 	fmt.Println("Doing the thing")
 	return nil
