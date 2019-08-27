@@ -22,10 +22,6 @@ import (
 const (
 	// DefaultRegion is the default AWS region to use for cloudwatchlogs.
 	DefaultRegion           string = "ap-southeast-2"
-	// DefaultTagNameLogGroup is the default tag used to specify the logGroup.
-	DefaultTagNameLogGroup  string = "edge.skpr.io/loggroup"
-	// DefaultTagNameLogStream is the default tag used to specify the logStream.
-	DefaultTagNameLogStream string = "edge.skpr.io/logstream"
 	// DefaultVerbosity is the default logging verbosity of the app.
 	DefaultVerbosity	    string = "info"
 )
@@ -142,10 +138,10 @@ func Cmd(app *kingpin.Application) {
 		Envar("AWS_REGION").
 		StringVar(&cmd.Region)
 	c.Flag("tag-group", "Tag name on cloudfront distribution to use for log group").
-		Default(DefaultTagNameLogGroup).
+		Default(discovery.DefaultTagNameLogGroup).
 		StringVar(&cmd.TagNameLogGroup)
 	c.Flag("tag-stream", "Tag name on cloudfront distribution to use for log stream").
-		Default(DefaultTagNameLogStream).
+		Default(discovery.DefaultTagNameLogStream).
 		StringVar(&cmd.TagNameLogStream)
 	c.Flag("verbosity", "Verbosity level").
 		Default(DefaultVerbosity).
