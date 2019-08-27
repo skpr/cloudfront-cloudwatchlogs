@@ -23,5 +23,5 @@ This tool requires the following cloud resources configured.
 
 ```bash
 # Ensure AWS credential chain is configured with environment variables.
-cloudfront-cloudwatchlogs watch --region=ap-southeast-2
+cloudfront-cloudwatchlogs discover-watch --region=ap-southeast-2
 ```

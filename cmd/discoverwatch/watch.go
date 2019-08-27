@@ -1,4 +1,4 @@
-package watchqueue
+package discoverwatch
 
 import (
 	"context"
@@ -30,7 +30,7 @@ const (
 	DefaultVerbosity	    string = "info"
 )
 
-type cmdWatch struct {
+type cmdDiscoverWatch struct {
 	// Verbosity defines the log level.
 	Verbosity string
 	// Region defines the cloudwatch region.
@@ -41,7 +41,7 @@ type cmdWatch struct {
 	TagNameLogStream string
 }
 
-func (cmd *cmdWatch) run(c *kingpin.ParseContext) error {
+func (cmd *cmdDiscoverWatch) run(c *kingpin.ParseContext) error {
 	loggerKeys := map[string]string{"region": cmd.Region}
 	logger := l.NewWithKeys(loggerKeys)
 	_ = logger.SetLevel(cmd.Verbosity)
@@ -136,8 +136,8 @@ func (cmd *cmdWatch) run(c *kingpin.ParseContext) error {
 
 // Cmd declares the "watch" sub command.
 func Cmd(app *kingpin.Application) {
-	cmd := new(cmdWatch)
-	c := app.Command("watch", "Discover CloudFront distributions with logging configured").Action(cmd.run)
+	cmd := new(cmdDiscoverWatch)
+	c := app.Command("discover-watch", "Discover CloudFront distributions with logging configured").Action(cmd.run)
 	c.Flag("region", "AWS region for discovery").Default(DefaultRegion).
 		Envar("AWS_REGION").
 		StringVar(&cmd.Region)
