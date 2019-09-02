@@ -5,9 +5,9 @@ import (
 
 	"gopkg.in/alecthomas/kingpin.v2"
 
-	"github.com/skpr/cloudfront-cloudwatchlogs/cmd/version"
-	"github.com/skpr/cloudfront-cloudwatchlogs/cmd/discoverwatch"
 	"github.com/skpr/cloudfront-cloudwatchlogs/cmd/discover"
+	"github.com/skpr/cloudfront-cloudwatchlogs/cmd/discoverwatch"
+	"github.com/skpr/cloudfront-cloudwatchlogs/cmd/version"
 )
 
 func main() {

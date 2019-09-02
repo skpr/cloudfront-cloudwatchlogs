@@ -13,13 +13,13 @@ import (
 
 type cmdDiscover struct {
 	// TagNameLogGroup defines the tag to use to specify the logGroup.
-	TagNameLogGroup  string
+	TagNameLogGroup string
 	// TagNameLogStream defines the tag to use to specify the logStream.
 	TagNameLogStream string
 }
 
 type response struct {
-	ID string	`json:"id"`
+	ID   string            `json:"id"`
 	Tags map[string]string `json:"tags"`
 }
 
@@ -39,7 +39,7 @@ func (cmd *cmdDiscover) run(c *kingpin.ParseContext) error {
 	responses := []response{}
 	for _, dist := range distributions {
 		r := response{
-			ID: *dist.DistributionSummary.Id,
+			ID:   *dist.DistributionSummary.Id,
 			Tags: make(map[string]string, 0),
 		}
 		for _, tag := range dist.Tags.Items {
