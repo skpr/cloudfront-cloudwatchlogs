@@ -7,6 +7,7 @@ import (
 
 	"github.com/skpr/cloudfront-cloudwatchlogs/cmd/version"
 	"github.com/skpr/cloudfront-cloudwatchlogs/cmd/discoverwatch"
+	"github.com/skpr/cloudfront-cloudwatchlogs/cmd/discover"
 )
 
 func main() {
@@ -14,6 +15,7 @@ func main() {
 
 	version.Cmd(app)
 	discoverwatch.Cmd(app)
+	discover.Cmd(app)
 
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 }
