@@ -122,7 +122,7 @@ func Worker(ctx context.Context, wg *sync.WaitGroup, in WorkerInput) error {
 	sort.Slice(messages, func(i, j int) bool {
 		a := *messages[i].Timestamp
 		b := *messages[j].Timestamp
-		return a > b
+		return a < b
 	})
 
 	err = logWriter.Stream(ctx, messages)
