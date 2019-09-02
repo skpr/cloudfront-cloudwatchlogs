@@ -31,9 +31,9 @@ type cmdDiscoverWatch struct {
 	Verbosity string
 	// Region defines the cloudwatch region.
 	Region string
-	// TagNameLogGroup defines the tag to use to specify the logGroup.
+	// LogGroup defines the tag to use to specify the logGroup.
 	TagNameLogGroup  string
-	// TagNameLogStream defines the tag to use to specify the logStream.
+	// LogStream defines the tag to use to specify the logStream.
 	TagNameLogStream string
 }
 
@@ -104,7 +104,7 @@ func (cmd *cmdDiscoverWatch) run(c *kingpin.ParseContext) error {
 		in := &discovery.GetDistributionLogQueueInput{
 			ClientS3:         clientS3,
 			ClientCloudfront: clientCloudfront,
-			Distribution:     item.DistributionSummary,
+			DistributionID:   item.DistributionSummary.Id,
 		}
 		queue, err := discovery.GetDistributionLogQueue(in)
 		if err != nil {

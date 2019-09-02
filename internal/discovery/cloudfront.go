@@ -43,13 +43,13 @@ func GetBucketNotificationQueue(client *s3.S3, BucketName *string) (*string, err
 type GetDistributionLogQueueInput struct {
 	ClientS3         *s3.S3
 	ClientCloudfront *cloudfront.CloudFront
-	Distribution     *cloudfront.DistributionSummary
+	DistributionID   *string
 }
 
 // GetDistributionLogQueue returns the SQS queue receiving messages when new log files hit the s3 bucket.
 func GetDistributionLogQueue(in *GetDistributionLogQueueInput) (*string, error) {
 	// Look up configured s3 bucket for logs.
-	bucket, err := GetDistributionLogBucket(in.ClientCloudfront, in.Distribution.Id)
+	bucket, err := GetDistributionLogBucket(in.ClientCloudfront, in.DistributionID)
 	if err != nil {
 		return nil, err
 	}

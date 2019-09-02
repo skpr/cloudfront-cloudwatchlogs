@@ -12,9 +12,9 @@ import (
 )
 
 type cmdDiscover struct {
-	// TagNameLogGroup defines the tag to use to specify the logGroup.
+	// LogGroup defines the tag to use to specify the logGroup.
 	TagNameLogGroup string
-	// TagNameLogStream defines the tag to use to specify the logStream.
+	// LogStream defines the tag to use to specify the logStream.
 	TagNameLogStream string
 }
 
