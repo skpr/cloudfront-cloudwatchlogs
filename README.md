@@ -14,14 +14,57 @@ This tool requires the following cloud resources configured.
 * A **S3 bucket**
     * Must have event notifications configure to create a SQS message on `s3:ObjectCreated:*` events.
 * A **SQS queue**
-* **IAM credentials** with permissions to
-    * List/Get cloudfront distributions
-    * Get objects from log s3 bucket
-    * Receive/delete SQS messages
+* **IAM credentials** with IAM policy similar to this:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:ListDistributions",
+        "cloudfront:ListTagsForResource",
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:DescribeLogStreams",
+        "logs:PutLogEvents",
+        "s3:GetBucketNotification",
+        "s3:GetObject",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueUrl",
+        "sqs:ReceiveMessage"
+      ],
+      "Effect": "Allow",
+      "Resource": "*"
+    }
+  ]
+}
+```
 
 ## Usage
 
+**Watch specific distribution**
+
 ```bash
-# Ensure AWS credential chain is configured with environment variables.
-cloudfront-cloudwatchlogs discover-watch --region=ap-southeast-2
+cloudfront-cloudwatchlogs watch --distribution [distribution-id] --group [logGroup] --stream [logStream] --region [cloudwatch region]
 ```
+
+**Discover distributions with cloudwatch tags**
+
+This command responds with json displaying the cloudfront distributions which have tags denoting destination in cloudwatchlogs.
+
+```bash
+cloudfront-cloudwatchlogs discover
+```
+
+**Discover and Watch**
+
+```bash
+cloudfront-cloudwatchlogs discover-watch --region  [cloudwatch region]
+```
+
+## Workflow
+
+![Workflow Diagram](docs/diagram.png)
