@@ -125,13 +125,16 @@ func Worker(ctx context.Context, wg *sync.WaitGroup, in WorkerInput) error {
 		return a < b
 	})
 
-	err = logWriter.Stream(ctx, messages)
-	if err != nil {
-		errmsg := "could not push log events to cloudwatch"
-		in.Logger.Error(errmsg, " ", err.Error())
-		return errors.Wrap(err, errmsg)
+	var reterr error
+	for _, chunk := range chunkMessages(messages, 256) {
+		err = logWriter.Stream(ctx, chunk)
+		if err != nil {
+			errmsg := "could not push log events to cloudwatch"
+			in.Logger.Error(errmsg, " ", err.Error())
+			reterr = err
+		}
 	}
-	return nil
+	return reterr
 }
 
 // DeleteMessage removes a completes message from the queue.

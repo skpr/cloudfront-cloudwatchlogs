@@ -5,8 +5,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestChunkMessages(t *testing.T) {
