@@ -172,3 +172,19 @@ func gunzipWrite(w io.Writer, data []byte) error {
 	_, err = w.Write(data)
 	return err
 }
+
+func chunkMessages(messages []*cloudwatchlogs.InputLogEvent, chunkSize int) [][]*cloudwatchlogs.InputLogEvent {
+	var chunks [][]*cloudwatchlogs.InputLogEvent
+
+	for i := 0; i < len(messages); i += chunkSize {
+		end := i + chunkSize
+
+		if end > len(messages) {
+			end = len(messages)
+		}
+
+		chunks = append(chunks, messages[i:end])
+	}
+
+	return chunks
+}
