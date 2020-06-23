@@ -35,12 +35,12 @@ func main() {
 			// Nothing in this line - probably just a newline.
 			continue
 		}
+		message := string(line)
 		// @todo replace with hasPrefix in streams package.
-		if string(line[0]) == "#" {
+		if strings.HasPrefix(string(message), "#") {
 			// Comment - ignore.
 			continue
 		}
-		message := string(line)
 		// Parse date out of cloudfront access log line.
 		date, message, err := parseDateAndMessage(message)
 		if err != nil {
