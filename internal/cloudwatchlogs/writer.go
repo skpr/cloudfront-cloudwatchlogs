@@ -2,6 +2,7 @@ package cloudwatchlogs
 
 import (
 	"context"
+	"github.com/aws/aws-sdk-go/service/cloudwatchlogs/cloudwatchlogsiface"
 	"github.com/pkg/errors"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 // Writer handles pushing messages to cloudwatchlogs.
 type Writer struct {
 	// Client is the cloudwatchlogs client.
-	Client *cloudwatchlogs.CloudWatchLogs
+	Client cloudwatchlogsiface.CloudWatchLogsAPI
 	// Logger is the log interface.
 	Logger log.Logger
 	// LogGroup is the name of the logGroup to store cloudfront logs.

@@ -9,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"io"
 	"io/ioutil"
+	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -19,7 +21,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/prometheus/common/log"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
+
+	cwl "github.com/skpr/cloudfront-cloudwatchlogs/internal/cloudwatchlogs"
 )
 
 // HandleEvents sent from AWS S3.
@@ -39,9 +44,10 @@ func HandleEvents(ctx context.Context, event events.S3Event) error {
 }
 // Helper function to handle a single S3 event.
 func handleEvent(ctx context.Context, s3client s3iface.S3API, cwclient cloudwatchlogsiface.CloudWatchLogsAPI, record events.S3EventRecord) error {
-	// Validate the record.
-	// Extract metadata.
-	// Extract file contents.
+	l := log.NewLogger(os.Stderr)
+
+	// Download the file.
+	l.Infof("Downloading %s from %s", record.S3.Object.Key, record.S3.Bucket.Name)
 	downloadIn := &s3.GetObjectInput{
 		Bucket: aws.String(record.S3.Bucket.Name),
 		Key:    aws.String(record.S3.Object.Key),
@@ -50,25 +56,35 @@ func handleEvent(ctx context.Context, s3client s3iface.S3API, cwclient cloudwatc
 	buffRaw := &aws.WriteAtBuffer{}
 	_, err := downloader.DownloadWithContext(ctx, buffRaw, downloadIn)
 	if err != nil {
-		errmsg := "unable to download log file"
-		// in.Logger.Error(errmsg)
-		return errors.Wrap(err, errmsg)
+		return fmt.Errorf("unable to download log file: %v", err)
 	}
-	// Loop and push to CloudWatch Logs.
-	contents, err := ioutil.ReadFile("./E2IZT1FG9IZCS6.2020-06-12-00.1937b23d.gz")
+	// Parse out messages.
+	messages, err := parseMessages(buffRaw.Bytes())
 	if err != nil {
-		panic(err)
+		return err
 	}
-	messages, err := parseMessages(contents)
+	l.Infof("Pushing %d logs to CloudWatch", len(messages))
+
+	logStream := "foo"
+	logWriter := cwl.Writer{
+		Logger: l,
+		Client: cwclient,
+		LogGroup: &record.S3.Object.Key,
+		LogStream: &logStream,
+	}
+	err = logWriter.EnsureLogStream(ctx)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("could not create log stream: %v", err)
 	}
 
-	// Print all messages.
-	for _, m := range messages {
-		fmt.Println(m)
+	for _, chunk := range chunkMessages(messages, 256) {
+		err = logWriter.Stream(ctx, chunk)
+		if err != nil {
+			errmsg := "could not push log events to cloudwatch"
+			l.Error(errmsg, " ", err.Error())
+			return err
+		}
 	}
-
 	return nil
 }
 
@@ -77,17 +93,17 @@ func main() {
 }
 
 // parseMessages from a gzip file contents.
-func parseMessages(contents []byte) ([]string, error) {
+func parseMessages(contents []byte) ([]*cloudwatchlogs.InputLogEvent, error) {
 	buff := bytes.Buffer{}
 	err := gunzipWrite(&buff, contents)
 	if err != nil {
-		return []string{}, err
+		return []*cloudwatchlogs.InputLogEvent{}, err
 	}
 
 	// Split the file by newline.
 	split := []byte("\n")
 	lines := bytes.Split(buff.Bytes(), split)
-	messages := make([]string, 0)
+	messages := make([]*cloudwatchlogs.InputLogEvent, 0)
 
 	// Loop over the lines and parse out the timestamp and message.
 	for _, line := range lines {
@@ -106,8 +122,18 @@ func parseMessages(contents []byte) ([]string, error) {
 			// Couldn't parse date, default to now.
 			date = time.Now()
 		}
-		messages = append(messages, fmt.Sprintf("Date: %d Message: %s", aws.TimeUnixMilli(date), message))
+		messages = append(messages, &cloudwatchlogs.InputLogEvent{
+			Message: aws.String(message),
+			Timestamp: aws.Int64(aws.TimeUnixMilli(date)),
+		})
 	}
+
+	// Sort the messages chronologically.
+	sort.Slice(messages, func(i, j int) bool {
+		a := *messages[i].Timestamp
+		b := *messages[j].Timestamp
+		return a < b
+	})
 
 	return messages, nil
 }
@@ -146,4 +172,20 @@ func parseDateAndMessage(line string) (time.Time, string, error) {
 	message := strings.Join(lineParts[2:], sep)
 
 	return date, message, err
+}
+
+func chunkMessages(messages []*cloudwatchlogs.InputLogEvent, chunkSize int) [][]*cloudwatchlogs.InputLogEvent {
+	var chunks [][]*cloudwatchlogs.InputLogEvent
+
+	for i := 0; i < len(messages); i += chunkSize {
+		end := i + chunkSize
+
+		if end > len(messages) {
+			end = len(messages)
+		}
+
+		chunks = append(chunks, messages[i:end])
+	}
+
+	return chunks
 }
