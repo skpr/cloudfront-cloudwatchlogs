@@ -2,26 +2,86 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"compress/gzip"
 	"errors"
 	"fmt"
+	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"io"
 	"io/ioutil"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go/service/cloudwatchlogs/cloudwatchlogsiface"
+	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 )
 
-func main() {
+// HandleEvents sent from AWS S3.
+func HandleEvents(ctx context.Context, event events.S3Event) error {
+	sess, err := session.NewSession()
+	if err != nil {
+		return fmt.Errorf("failed to setup client: %d", err)
+	}
+	for _, record := range event.Records {
+		fmt.Printf("[%s - %s] Bucket = %s, Key = %s \n", record.EventSource, record.EventTime, record.S3.Bucket.Name, record.S3.Object.Key)
+		err := handleEvent(ctx, s3.New(sess), cloudwatchlogs.New(sess), record)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+// Helper function to handle a single S3 event.
+func handleEvent(ctx context.Context, s3client s3iface.S3API, cwclient cloudwatchlogsiface.CloudWatchLogsAPI, record events.S3EventRecord) error {
+	// Validate the record.
+	// Extract metadata.
+	// Extract file contents.
+	downloadIn := &s3.GetObjectInput{
+		Bucket: aws.String(record.S3.Bucket.Name),
+		Key:    aws.String(record.S3.Object.Key),
+	}
+	downloader := s3manager.NewDownloaderWithClient(s3client)
+	buffRaw := &aws.WriteAtBuffer{}
+	_, err := downloader.DownloadWithContext(ctx, buffRaw, downloadIn)
+	if err != nil {
+		errmsg := "unable to download log file"
+		// in.Logger.Error(errmsg)
+		return errors.Wrap(err, errmsg)
+	}
+	// Loop and push to CloudWatch Logs.
 	contents, err := ioutil.ReadFile("./E2IZT1FG9IZCS6.2020-06-12-00.1937b23d.gz")
 	if err != nil {
 		panic(err)
 	}
-	buff := bytes.Buffer{}
-	err = gunzipWrite(&buff, contents)
+	messages, err := parseMessages(contents)
 	if err != nil {
 		panic(err)
+	}
+
+	// Print all messages.
+	for _, m := range messages {
+		fmt.Println(m)
+	}
+
+	return nil
+}
+
+func main() {
+	lambda.Start(HandleEvents)
+}
+
+// parseMessages from a gzip file contents.
+func parseMessages(contents []byte) ([]string, error) {
+	buff := bytes.Buffer{}
+	err := gunzipWrite(&buff, contents)
+	if err != nil {
+		return []string{}, err
 	}
 
 	// Split the file by newline.
@@ -36,7 +96,6 @@ func main() {
 			continue
 		}
 		message := string(line)
-		// @todo replace with hasPrefix in streams package.
 		if strings.HasPrefix(string(message), "#") {
 			// Comment - ignore.
 			continue
@@ -50,10 +109,7 @@ func main() {
 		messages = append(messages, fmt.Sprintf("Date: %d Message: %s", aws.TimeUnixMilli(date), message))
 	}
 
-	// Print all messages.
-	for _, m := range messages {
-		fmt.Println(m)
-	}
+	return messages, nil
 }
 
 // gunzipWrite a gzip file to a buffer.
