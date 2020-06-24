@@ -69,11 +69,11 @@ func handleEvent(ctx context.Context, s3client s3iface.S3API, cwclient cloudwatc
 	}
 	l.Infof("Pushing %d logs to CloudWatch", len(messages))
 
-	logStream := "foo"
+	logGroup, logStream := parseLogGroupAndStream(record.S3.Object.Key)
 	logWriter := cwl.Writer{
 		Logger: l,
 		Client: cwclient,
-		LogGroup: &record.S3.Object.Key,
+		LogGroup: &logGroup,
 		LogStream: &logStream,
 	}
 	err = logWriter.EnsureLogStream(ctx)
@@ -172,6 +172,26 @@ func parseDateAndMessage(line string) (time.Time, string, error) {
 	message := strings.Join(lineParts[2:], sep)
 
 	return date, message, err
+}
+
+// parseLogGroupAndStream from the s3 object key.
+func parseLogGroupAndStream(key string) (string, string) {
+	var (
+		logGroup string
+		logStream string
+	)
+	sep := "/"
+	// Split the key up by slash.
+	keyParts := strings.Split(key, sep)
+	// Filename is the last part of the key.
+	filename := keyParts[len(keyParts) - 1]
+	// LogGroup is the whole key excluding the filename.
+	logGroup = strings.Join(keyParts[:len(keyParts) - 1], sep)
+	// LogStream is all parts of the filename without the extension.
+	sep = "."
+	filenameParts := strings.Split(filename, sep)
+	logStream = strings.Join(filenameParts[:len(filenameParts) - 1], sep)
+	return logGroup, logStream
 }
 
 func chunkMessages(messages []*cloudwatchlogs.InputLogEvent, chunkSize int) [][]*cloudwatchlogs.InputLogEvent {
