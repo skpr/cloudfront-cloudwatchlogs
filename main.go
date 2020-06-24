@@ -2,10 +2,11 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"io"
 	"io/ioutil"
@@ -14,18 +15,21 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs/cloudwatchlogsiface"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/prometheus/common/log"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
 
 	cwl "github.com/skpr/cloudfront-cloudwatchlogs/internal/cloudwatchlogs"
 )
+
+func main() {
+	lambda.Start(HandleEvents)
+}
 
 // HandleEvents sent from AWS S3.
 func HandleEvents(ctx context.Context, event events.S3Event) error {
@@ -86,10 +90,6 @@ func handleEvent(ctx context.Context, s3client s3iface.S3API, cwclient cloudwatc
 		}
 	}
 	return nil
-}
-
-func main() {
-	lambda.Start(HandleEvents)
 }
 
 // parseMessages from a gzip file contents.
