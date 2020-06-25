@@ -24,7 +24,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/prometheus/common/log"
 
-	cwl "github.com/skpr/cloudfront-cloudwatchlogs/internal/cloudwatchlogs"
+	"github.com/skpr/cloudfront-cloudwatchlogs/internal/aws/cloudwatchlogs/logger"
 )
 
 func main() {
@@ -62,38 +62,30 @@ func handleEvent(ctx context.Context, s3client s3iface.S3API, cwclient cloudwatc
 	if err != nil {
 		return fmt.Errorf("unable to download log file: %v", err)
 	}
-	// Parse out messages.
-	messages, err := parseMessages(buffRaw.Bytes())
+	// Parse out lines.
+	lines, err := parseLines(buffRaw.Bytes())
 	if err != nil {
 		return err
 	}
-	l.Infof("Pushing %d logs to CloudWatch", len(messages))
+	l.Infof("Pushing %d logs to CloudWatch", len(lines))
 
 	logGroup, logStream := parseLogGroupAndStream(record.S3.Object.Key)
-	logWriter := cwl.Writer{
-		Logger: l,
-		Client: cwclient,
-		LogGroup: &logGroup,
-		LogStream: &logStream,
-	}
-	err = logWriter.EnsureLogStream(ctx)
+	cwLogger, err := logger.New(cwclient, logGroup, logStream, 256)
 	if err != nil {
-		return fmt.Errorf("could not create log stream: %v", err)
+		return err
 	}
-
-	for _, chunk := range chunkMessages(messages, 256) {
-		err = logWriter.Stream(ctx, chunk)
+	for _, line := range lines {
+		err = cwLogger.Add(line)
 		if err != nil {
-			errmsg := "could not push log events to cloudwatch"
-			l.Error(errmsg, " ", err.Error())
 			return err
 		}
 	}
-	return nil
+
+	return cwLogger.Flush()
 }
 
-// parseMessages from a gzip file contents.
-func parseMessages(contents []byte) ([]*cloudwatchlogs.InputLogEvent, error) {
+// parseLines from a gzip file contents.
+func parseLines(contents []byte) ([]*cloudwatchlogs.InputLogEvent, error) {
 	buff := bytes.Buffer{}
 	err := gunzipWrite(&buff, contents)
 	if err != nil {
@@ -192,20 +184,4 @@ func parseLogGroupAndStream(key string) (string, string) {
 	filenameParts := strings.Split(filename, sep)
 	logStream = strings.Join(filenameParts[:len(filenameParts) - 1], sep)
 	return logGroup, logStream
-}
-
-func chunkMessages(messages []*cloudwatchlogs.InputLogEvent, chunkSize int) [][]*cloudwatchlogs.InputLogEvent {
-	var chunks [][]*cloudwatchlogs.InputLogEvent
-
-	for i := 0; i < len(messages); i += chunkSize {
-		end := i + chunkSize
-
-		if end > len(messages) {
-			end = len(messages)
-		}
-
-		chunks = append(chunks, messages[i:end])
-	}
-
-	return chunks
 }
