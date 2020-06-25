@@ -3,9 +3,7 @@
 export CGO_ENABLED=0
 export GO111MODULE=on
 
-PROJECT=github.com/skpr/cloudfront-cloudwatchlogs
-VERSION=$(shell git describe --tags --always)
-COMMIT=$(shell git rev-list -1 HEAD)
+OUTPUT=bin/main
 
 default: lint test build
 
@@ -22,8 +20,8 @@ test:
 	go test -cover ./...
 
 build:
-	gox -os='linux darwin' \
-	    -arch='amd64' \
-	    -output='bin/cloudfront-cloudwatchlogs_{{.OS}}_{{.Arch}}' \
-	    -ldflags='-extldflags "-static" -X github.com/skpr/cloudfront-cloudwatchlogs/cmd/version.GitVersion=$(VERSION) -X github.com/skpr/cloudfront-cloudwatchlogs/cmd/version.GitCommit=$(COMMIT)' \
-	    $(PROJECT)
+	GOOS=linux go build -o ${OUTPUT} main.go
+
+# https://docs.aws.amazon.com/lambda/latest/dg/golang-package.html
+package: build
+	zip -j function.zip ${OUTPUT}
