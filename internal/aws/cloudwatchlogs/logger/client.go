@@ -35,9 +35,9 @@ type Client struct {
 // New client which creates the log group, stream and returns a client for batching logs to it.
 func New(client cloudwatchlogsiface.CloudWatchLogsAPI, group, stream string, batchSize int) (*Client, error) {
 	batch := &Client{
-		Group: group,
-		Stream: stream,
-		client: client,
+		Group:     group,
+		Stream:    stream,
+		client:    client,
 		batchSize: batchSize,
 	}
 
@@ -82,7 +82,6 @@ func (c *Client) Flush() error {
 	return c.putLogEvents(input)
 }
 
-
 // PutLogEvents will attempt to execute and handle invalid tokens.
 func (c *Client) putLogEvents(input *cloudwatchlogs.PutLogEventsInput) error {
 	_, err := c.client.PutLogEvents(input)
@@ -120,7 +119,7 @@ func PutLogGroup(client cloudwatchlogsiface.CloudWatchLogsAPI, name string) erro
 // PutLogStream will attempt to create a log stream and not return an error if it already exists.
 func PutLogStream(client cloudwatchlogsiface.CloudWatchLogsAPI, group, stream string) error {
 	_, err := client.CreateLogStream(&cloudwatchlogs.CreateLogStreamInput{
-		LogGroupName: aws.String(group),
+		LogGroupName:  aws.String(group),
 		LogStreamName: aws.String(stream),
 	})
 	if err != nil {

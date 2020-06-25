@@ -13,6 +13,10 @@ default: lint test build
 lint:
 	golint -set_exit_status `go list ./... | grep -v /vendor/`
 
+# Run go fmt against code
+fmt:
+	go fmt ./...
+
 # Run tests with coverage reporting.
 test:
 	go test -cover ./...

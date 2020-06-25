@@ -46,6 +46,7 @@ func HandleEvents(ctx context.Context, event events.S3Event) error {
 	}
 	return nil
 }
+
 // Helper function to handle a single S3 event.
 func handleEvent(ctx context.Context, s3client s3iface.S3API, cwclient cloudwatchlogsiface.CloudWatchLogsAPI, record events.S3EventRecord) error {
 	l := log.NewLogger(os.Stderr)
@@ -115,7 +116,7 @@ func parseLines(contents []byte) ([]*cloudwatchlogs.InputLogEvent, error) {
 			date = time.Now()
 		}
 		messages = append(messages, &cloudwatchlogs.InputLogEvent{
-			Message: aws.String(message),
+			Message:   aws.String(message),
 			Timestamp: aws.Int64(aws.TimeUnixMilli(date)),
 		})
 	}
@@ -169,19 +170,19 @@ func parseDateAndMessage(line string) (time.Time, string, error) {
 // parseLogGroupAndStream from the s3 object key.
 func parseLogGroupAndStream(key string) (string, string) {
 	var (
-		logGroup string
+		logGroup  string
 		logStream string
 	)
 	sep := "/"
 	// Split the key up by slash.
 	keyParts := strings.Split(key, sep)
 	// Filename is the last part of the key.
-	filename := keyParts[len(keyParts) - 1]
+	filename := keyParts[len(keyParts)-1]
 	// LogGroup is the whole key excluding the filename.
-	logGroup = strings.Join(keyParts[:len(keyParts) - 1], sep)
+	logGroup = strings.Join(keyParts[:len(keyParts)-1], sep)
 	// LogStream is all parts of the filename without the extension.
 	sep = "."
 	filenameParts := strings.Split(filename, sep)
-	logStream = strings.Join(filenameParts[:len(filenameParts) - 1], sep)
+	logStream = strings.Join(filenameParts[:len(filenameParts)-1], sep)
 	return logGroup, logStream
 }
