@@ -9,11 +9,14 @@ import (
 )
 
 func TestParseLogGroupAndStream(t *testing.T) {
-	key := "/skpr/my-cluster/my-project/dev/E38J4Y0L8GXH9D.2020-06-08-07.d51ccc94.gz"
-	logGroup, logStream := parseLogGroupAndStream(key)
+	logGroup, logStream := parseLogGroupAndStream("/skpr/my-cluster/my-project/dev/E38J4Y0L8GXH9D.2020-06-08-07.d51ccc94.gz")
 
 	assert.Equal(t, "/skpr/my-cluster/my-project/dev", logGroup)
 	assert.Equal(t, "E38J4Y0L8GXH9D.2020-06-08-07.d51ccc94", logStream)
+
+	// Make sure logGroup gets prefixed with a /.
+	logGroup, _ = parseLogGroupAndStream("skpr/my-cluster/my-project/prod/E38J4Y0L8GXH9D.2020-06-08-07.d51ccc94.gz")
+	assert.Equal(t, "/skpr/my-cluster/my-project/prod", logGroup)
 }
 
 func TestParseLines(t *testing.T) {

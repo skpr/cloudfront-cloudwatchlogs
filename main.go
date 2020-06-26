@@ -180,6 +180,10 @@ func parseLogGroupAndStream(key string) (string, string) {
 	filename := keyParts[len(keyParts)-1]
 	// LogGroup is the whole key excluding the filename.
 	logGroup = strings.Join(keyParts[:len(keyParts)-1], sep)
+	// Ensure the logGroup is prefixed with a slash.
+	if !strings.HasPrefix(logGroup, "/") {
+		logGroup = fmt.Sprintf("/%s", logGroup)
+	}
 	// LogStream is all parts of the filename without the extension.
 	sep = "."
 	filenameParts := strings.Split(filename, sep)
