@@ -28,7 +28,7 @@ type Client struct {
 	batchSize int
 	// Events stored in memory before being pushed.
 	events []*cloudwatchlogs.InputLogEvent
-	// Lock to ensure logs are
+	// Lock to ensure logs are handled by only 1 process.
 	lock sync.Mutex
 }
 
@@ -76,7 +76,7 @@ func (c *Client) Flush() error {
 		LogEvents:     c.events,
 	}
 
-	// Reset the logs back to
+	// Reset the logs back to empty.
 	c.events = []*cloudwatchlogs.InputLogEvent{}
 
 	return c.putLogEvents(input)
