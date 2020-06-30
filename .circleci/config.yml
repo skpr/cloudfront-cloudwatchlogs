@@ -6,7 +6,15 @@ workflows:
     jobs:
       - lint
       - test
-
+  main:
+    jobs:
+      - release:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              # Only on tags formatted like v0.1.1
+              only: /^v\d+\.\d+\.\d+$/
 jobs:
   lint:
     docker:
@@ -25,3 +33,17 @@ jobs:
     steps:
       - checkout
       - run: make test
+
+  release:
+    docker:
+      - image: cibuilds/github:0.10
+    steps:
+      - checkout
+      - run:
+          name: "Build"
+          command: make package
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            VERSION=$(git describe --tags --always)
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${VERSION} ./function.zip
