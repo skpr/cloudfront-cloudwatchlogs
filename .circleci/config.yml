@@ -6,6 +6,15 @@ workflows:
     jobs:
       - lint
       - test
+  release:
+    jobs:
+      - release:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              # Only on tags formatted like v0.1.1
+              only: /^v\d+\.\d+\.\d+$/
 
 jobs:
   lint:
@@ -25,3 +34,18 @@ jobs:
     steps:
       - checkout
       - run: make test
+
+  release:
+    docker:
+      - image: golang:1.13
+    steps:
+      - checkout
+      - run:
+          name: "Build"
+          command: make package
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            go get github.com/tcnksm/ghr
+            VERSION=$(git describe --tags --always)
+            ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -c ${CIRCLE_SHA1} -delete ${VERSION} ./function.zip

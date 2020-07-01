@@ -12,3 +12,6 @@
 *.out
 /bin
 .idea
+
+# Output of make package
+function.zip
