@@ -67,6 +67,11 @@ func (c *Client) Add(event *cloudwatchlogs.InputLogEvent) error {
 
 // Flush events stored in the client.
 func (c *Client) Flush() error {
+	// Return early if there are no events to push.
+	if len(c.events) == 0 {
+		return nil
+	}
+
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
