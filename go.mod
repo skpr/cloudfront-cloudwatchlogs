@@ -9,6 +9,13 @@ require (
 	github.com/alecthomas/units v0.0.0-20190717042225-c3de453c63f4 // indirect
 	github.com/aws/aws-lambda-go v1.17.0
 	github.com/aws/aws-sdk-go v1.32.0
+	github.com/aws/aws-sdk-go-v2 v1.8.0
+	github.com/aws/aws-sdk-go-v2/config v1.6.0
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.4.0
+	github.com/aws/aws-sdk-go-v2/service/cloudfront v1.7.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.5.2
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.12.0
+	github.com/aws/smithy-go v1.7.0 // indirect
 	github.com/docker/docker v1.13.1 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
@@ -16,7 +23,6 @@ require (
 	github.com/fatih/color v1.7.0 // indirect
 	github.com/go-kit/kit v0.9.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
-	github.com/google/go-cmp v0.3.1 // indirect
 	github.com/google/pprof v0.0.0-20190723021845-34ac40c74b70 // indirect
 	github.com/gorilla/mux v1.7.3 // indirect
 	github.com/gosuri/uitable v0.0.3 // indirect

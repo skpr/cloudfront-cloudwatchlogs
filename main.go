@@ -15,13 +15,12 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs/cloudwatchlogsiface"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/prometheus/common/log"
 
 	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/aws/cloudwatchlogs/logger"
@@ -33,13 +32,15 @@ func main() {
 
 // HandleEvents sent from AWS S3.
 func HandleEvents(ctx context.Context, event events.S3Event) error {
-	sess, err := session.NewSession()
+	cfg, err := config.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		return fmt.Errorf("failed to setup client: %d", err)
 	}
+	s3Client := s3.NewFromConfig(cfg)
+	cwclient := cloudwatchlogs.NewFromConfig(cfg)
 	for _, record := range event.Records {
 		fmt.Printf("[%s - %s] Bucket = %s, Key = %s \n", record.EventSource, record.EventTime, record.S3.Bucket.Name, record.S3.Object.Key)
-		err := handleEvent(ctx, s3.New(sess), cloudwatchlogs.New(sess), record)
+		err := handleEvent(ctx, s3Client, cwclient, record)
 		if err != nil {
 			return err
 		}
@@ -48,7 +49,7 @@ func HandleEvents(ctx context.Context, event events.S3Event) error {
 }
 
 // Helper function to handle a single S3 event.
-func handleEvent(ctx context.Context, s3client s3iface.S3API, cwclient cloudwatchlogsiface.CloudWatchLogsAPI, record events.S3EventRecord) error {
+func handleEvent(ctx context.Context, s3client manager.DownloadAPIClient, cwclient *cloudwatchlogs.Client, record events.S3EventRecord) error {
 	l := log.NewLogger(os.Stderr)
 
 	// Download the file.
@@ -57,9 +58,9 @@ func handleEvent(ctx context.Context, s3client s3iface.S3API, cwclient cloudwatc
 		Bucket: aws.String(record.S3.Bucket.Name),
 		Key:    aws.String(record.S3.Object.Key),
 	}
-	downloader := s3manager.NewDownloaderWithClient(s3client)
-	buffRaw := &aws.WriteAtBuffer{}
-	_, err := downloader.DownloadWithContext(ctx, buffRaw, downloadIn)
+	downloader := manager.NewDownloader(s3client)
+	buffRaw := &manager.WriteAtBuffer{}
+	_, err := downloader.Download(ctx, buffRaw, downloadIn)
 	if err != nil {
 		return fmt.Errorf("unable to download log file: %v", err)
 	}
@@ -76,27 +77,27 @@ func handleEvent(ctx context.Context, s3client s3iface.S3API, cwclient cloudwatc
 		return err
 	}
 	for _, line := range lines {
-		err = cwLogger.Add(line)
+		err = cwLogger.Add(ctx, line)
 		if err != nil {
 			return err
 		}
 	}
 
-	return cwLogger.Flush()
+	return cwLogger.Flush(ctx)
 }
 
 // parseLines from a gzip file contents.
-func parseLines(contents []byte) ([]*cloudwatchlogs.InputLogEvent, error) {
+func parseLines(contents []byte) ([]types.InputLogEvent, error) {
 	buff := bytes.Buffer{}
 	err := gunzipWrite(&buff, contents)
 	if err != nil {
-		return []*cloudwatchlogs.InputLogEvent{}, err
+		return []types.InputLogEvent{}, err
 	}
 
 	// Split the file by newline.
 	split := []byte("\n")
 	lines := bytes.Split(buff.Bytes(), split)
-	messages := make([]*cloudwatchlogs.InputLogEvent, 0)
+	messages := make([]types.InputLogEvent, 0)
 
 	// Loop over the lines and parse out the timestamp and message.
 	for _, line := range lines {
@@ -115,9 +116,9 @@ func parseLines(contents []byte) ([]*cloudwatchlogs.InputLogEvent, error) {
 			// Couldn't parse date, default to now.
 			date = time.Now()
 		}
-		messages = append(messages, &cloudwatchlogs.InputLogEvent{
+		messages = append(messages, types.InputLogEvent{
 			Message:   aws.String(message),
-			Timestamp: aws.Int64(aws.TimeUnixMilli(date)),
+			Timestamp: aws.Int64(date.UnixNano() / int64(time.Millisecond/time.Nanosecond)),
 		})
 	}
 
