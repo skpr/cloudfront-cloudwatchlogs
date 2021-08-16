@@ -114,7 +114,7 @@ func PutLogGroup(ctx context.Context, client CloudwatchLogsInterface, name strin
 		LogGroupName: aws.String(name),
 	})
 	if err != nil {
-		var awsErr types.ResourceAlreadyExistsException
+		var awsErr *types.ResourceAlreadyExistsException
 		if errors.As(err, &awsErr) {
 			return nil
 		}
@@ -132,7 +132,7 @@ func PutLogStream(ctx context.Context, client CloudwatchLogsInterface, group, st
 		LogStreamName: aws.String(stream),
 	})
 	if err != nil {
-		var awsErr types.ResourceAlreadyExistsException
+		var awsErr *types.ResourceAlreadyExistsException
 		if errors.As(err, &awsErr) {
 			return nil
 		}
