@@ -19,7 +19,7 @@ workflows:
 jobs:
   lint:
     docker:
-      - image: golang:1.15
+      - image: golang:1.16
     working_directory: /go/src/github.com/codedropau/cloudfront-cloudwatchlogs
     steps:
       - checkout
@@ -29,7 +29,7 @@ jobs:
 
   test:
     docker:
-      - image: golang:1.15
+      - image: golang:1.16
     working_directory: /go/src/github.com/codedropau/cloudfront-cloudwatchlogs
     steps:
       - checkout
@@ -37,7 +37,7 @@ jobs:
 
   release:
     docker:
-      - image: golang:1.15
+      - image: golang:1.16
     steps:
       - checkout
       - run:
