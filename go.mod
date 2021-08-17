@@ -11,7 +11,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.4.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.5.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.12.0
-	github.com/aws/smithy-go v1.7.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/prometheus/common v0.6.0
