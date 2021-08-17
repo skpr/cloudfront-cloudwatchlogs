@@ -95,7 +95,7 @@ func (c *BatchLogPusher) putLogEvents(ctx context.Context, input *cloudwatchlogs
 	_, err := c.cwLogsClient.PutLogEvents(ctx, input)
 	if err != nil {
 		if exception, ok := err.(*awstypes.InvalidSequenceTokenException); ok {
-			log.Println("Refreshing token:", *input.LogGroupName, *input.LogStreamName)
+			log.Println("Refreshing token:", &input.LogGroupName, &input.LogStreamName)
 			input.SequenceToken = exception.ExpectedSequenceToken
 			return c.putLogEvents(ctx, input)
 		}
