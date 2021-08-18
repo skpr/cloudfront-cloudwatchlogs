@@ -8,6 +8,7 @@ import (
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/aws/aws-sdk-go-v2/aws/retry"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -32,7 +33,12 @@ func HandleEvents(ctx context.Context, event events.S3Event) error {
 		return fmt.Errorf("failed to setup client: %d", err)
 	}
 	s3Client := s3.NewFromConfig(cfg)
-	cwLogsClient := cloudwatchlogs.NewFromConfig(cfg)
+	cwLogsClient := cloudwatchlogs.NewFromConfig(cfg, func(options *cloudwatchlogs.Options) {
+		// Setting max attempts to zero will allow the SDK to retry all retryable errors until the
+		// request succeeds, or a non-retryable error is returned.
+		// https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/retries-timeouts
+		options.Retryer = retry.AddWithMaxAttempts(options.Retryer, 0)
+	})
 	logger := log.NewLogger(os.Stderr)
 
 	batchSize, err := getBatchSize(err)
