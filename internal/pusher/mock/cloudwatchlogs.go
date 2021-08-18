@@ -10,7 +10,7 @@ import (
 
 // CloudwatchLogs is the mock cloudwatch logs client.
 type CloudwatchLogs struct {
-	types.CloudwatchLogsInterface
+	types.CloudwatchLogsPutInterface
 }
 
 // NewCloudwatchLogs creates a new mock cloudwatch logs client.

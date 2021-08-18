@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/prometheus/common/log"
 
+	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/creator"
 	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/parser"
 	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/processor"
 	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/pusher"
@@ -52,12 +53,25 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 	}
 	h.log.Infof("Fetched %s from %s from %s", utils.ByteCountBinary(n), key, bucket)
 
-	h.log.Infof("Creating log pusher")
 	logGroup, logStream := parser.ParseLogGroupAndStream(key)
-	logPusher, err := pusher.NewBatchLogPusher(ctx, h.log, h.cwLogsClient, logGroup, logStream, h.batchSize)
+
+	h.log.Infof("Ensuring log group %s exists", logGroup)
+	logGroupCreator := creator.NewLogGroupCreator(h.log, h.cwLogsClient)
+	err = logGroupCreator.Ensure(ctx, logGroup)
 	if err != nil {
-		return fmt.Errorf("error creating logger: %w", err)
+		return err
 	}
+
+	h.log.Infof("Ensuring log stream %s exists", logStream)
+	logStreamCreator := creator.NewLogStreamCreator(h.log, h.cwLogsClient)
+	err = logStreamCreator.Ensure(ctx, logStream)
+	if err != nil {
+		return err
+	}
+
+	h.log.Infof("Creating log pusher")
+
+	logPusher := pusher.NewBatchLogPusher(h.log, h.cwLogsClient, logGroup, logStream, h.batchSize)
 
 	h.log.Infof("Processing logs")
 	err = processor.ProcessLines(gzipBuff.Bytes(), func(event types.InputLogEvent) error {

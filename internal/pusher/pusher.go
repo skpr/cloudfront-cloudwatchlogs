@@ -2,8 +2,6 @@ package pusher
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"sort"
 	"sync"
 
@@ -19,10 +17,9 @@ import (
 // BatchLogPusher cwLogsClient for handling log events.
 // @TODO convert into lib reused by fluentbit-cloudwatchlogs
 type BatchLogPusher struct {
-	// log for logging.
 	log log.Logger
-	// BatchLogPusher for interacting with CloudWatch Logs.
-	cwLogsClient types.CloudwatchLogsInterface
+	// cwLogsClient for interacting with CloudWatch Logs.
+	cwLogsClient types.CloudwatchLogsPutInterface
 	// Group which events will be pushed to.
 	Group string
 	// Stream which events will be pushed to.
@@ -38,7 +35,7 @@ type BatchLogPusher struct {
 }
 
 // NewBatchLogPusher creates a new batch log pusher.
-func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient types.CloudwatchLogsInterface, group, stream string, batchSize int) (*BatchLogPusher, error) {
+func NewBatchLogPusher(logger log.Logger, cwLogsClient types.CloudwatchLogsPutInterface, group, stream string, batchSize int) *BatchLogPusher {
 	pusher := &BatchLogPusher{
 		log:          logger,
 		Group:        group,
@@ -46,21 +43,7 @@ func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient type
 		cwLogsClient: cwLogsClient,
 		batchSize:    batchSize,
 	}
-	err := pusher.initialize(ctx)
-	return pusher, err
-}
-
-// initialize the log pusher by creating log groups and streams.
-func (p *BatchLogPusher) initialize(ctx context.Context) error {
-	err := p.createLogGroup(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create log group %s: %w", p.Group, err)
-	}
-	err = p.createLogStream(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create log stream %s for group %s: %w", p.Stream, p.Group, err)
-	}
-	return nil
+	return pusher
 }
 
 // Add event to the cwLogsClient.
@@ -116,39 +99,6 @@ func (p *BatchLogPusher) putLogEvents(ctx context.Context, input *cloudwatchlogs
 			p.log.Infof("Refreshing token:", &input.LogGroupName, &input.LogStreamName)
 			input.SequenceToken = exception.ExpectedSequenceToken
 			return p.putLogEvents(ctx, input)
-		}
-		return err
-	}
-
-	return nil
-}
-
-// createLogGroup will attempt to create a log group and not return an error if it already exists.
-func (p *BatchLogPusher) createLogGroup(ctx context.Context) error {
-	_, err := p.cwLogsClient.CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
-		LogGroupName: aws.String(p.Group),
-	})
-	if err != nil {
-		var awsErr *awstypes.ResourceAlreadyExistsException
-		if errors.As(err, &awsErr) {
-			return nil
-		}
-		return err
-	}
-
-	return nil
-}
-
-// createLogStream will attempt to create a log stream and not return an error if it already exists.
-func (p *BatchLogPusher) createLogStream(ctx context.Context) error {
-	_, err := p.cwLogsClient.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
-		LogGroupName:  aws.String(p.Group),
-		LogStreamName: aws.String(p.Stream),
-	})
-	if err != nil {
-		var awsErr *awstypes.ResourceAlreadyExistsException
-		if errors.As(err, &awsErr) {
-			return nil
 		}
 		return err
 	}
