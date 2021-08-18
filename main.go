@@ -21,7 +21,7 @@ func main() {
 
 // HandleEvents sent from AWS S3.
 func HandleEvents(ctx context.Context, event events.S3Event) error {
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to setup client: %d", err)
 	}
