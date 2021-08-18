@@ -40,7 +40,9 @@ func NewEventHandler(log log.Logger, downloadClient manager.DownloadAPIClient, c
 func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRecord) error {
 	key := record.S3.Object.Key
 	bucket := record.S3.Bucket.Name
+
 	h.log.Infof("Downloading logs %s from s3 bucket %s", key, bucket)
+
 	downloader := manager.NewDownloader(h.downloadClient)
 	gzipBuff := manager.NewWriteAtBuffer([]byte{})
 	n, err := downloader.Download(ctx, gzipBuff, &s3.GetObjectInput{
@@ -50,27 +52,42 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 	if err != nil {
 		return fmt.Errorf("failed to download %s from %s: %w", key, bucket, err)
 	}
+
 	h.log.Infof("Fetched %s from %s from %s", utils.ByteCountBinary(n), key, bucket)
 
 	h.log.Infof("Creating log pusher")
+
 	logGroup, logStream := parser.ParseLogGroupAndStream(key)
-	logPusher, err := pusher.NewBatchLogPusher(ctx, h.log, h.cwLogsClient, logGroup, logStream, h.batchSize)
-	if err != nil {
-		return fmt.Errorf("error creating logger: %w", err)
+
+	if err := pusher.CreateLogGroup(ctx, h.cwLogsClient, logGroup); err != nil {
+		return err
+	}
+
+	if err := pusher.CreateLogStream(ctx, h.cwLogsClient, logGroup, logStream); err != nil {
+		return err
 	}
 
 	h.log.Infof("Processing logs")
+
+	input := &cloudwatchlogs.PutLogEventsInput{
+		LogGroupName:  aws.String(logGroup),
+		LogStreamName: aws.String(logStream),
+	}
+
 	err = processor.ProcessLines(gzipBuff.Bytes(), func(event types.InputLogEvent) error {
-		err = logPusher.Add(ctx, event)
-		if err != nil {
-			return err
+		if len(input.LogEvents) >= h.batchSize {
+			return pusher.PutLogEvents(ctx, h.cwLogsClient, input)
 		}
+
+		input.LogEvents = append(input.LogEvents, event)
+
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	err = logPusher.Flush(ctx)
+
+	err = pusher.PutLogEvents(ctx, h.cwLogsClient, input)
 	if err != nil {
 		return err
 	}
