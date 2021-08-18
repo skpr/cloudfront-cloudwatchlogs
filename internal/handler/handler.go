@@ -52,7 +52,7 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 
 	h.log.Infof("Creating log pusher")
 	logGroup, logStream := parser.ParseLogGroupAndStream(key)
-	logPusher, err := pusher.NewBatchLogPusher(ctx, h.cwLogsClient, logGroup, logStream, 256)
+	logPusher, err := pusher.NewBatchLogPusher(ctx, h.log, h.cwLogsClient, logGroup, logStream, 256)
 	if err != nil {
 		return fmt.Errorf("error creating logger: %w", err)
 	}

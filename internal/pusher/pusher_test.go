@@ -3,12 +3,14 @@ package pusher
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"testing"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
+	"github.com/prometheus/common/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/pusher/mock"
@@ -20,7 +22,8 @@ func TestBatchLogPusher_Add(t *testing.T) {
 	stream := "bar"
 	batchSize := 3
 	ctx := context.TODO()
-	logPusher, err := NewBatchLogPusher(ctx, cwlogs, group, stream, batchSize)
+	logger := log.NewLogger(os.Stderr)
+	logPusher, err := NewBatchLogPusher(ctx, logger, cwlogs, group, stream, batchSize)
 	assert.NoError(t, err)
 
 	// Add 3 events.
@@ -37,13 +40,15 @@ func TestBatchLogPusher_Add(t *testing.T) {
 }
 
 func TestBatchLogPusher_AddMany(t *testing.T) {
+	t.Skipf("Skipping performance test")
 	PrintMemUsage()
 	cwlogs := mock.NewCloudwatchLogs()
 	group := "foo"
 	stream := "bar"
 	batchSize := 3
 	ctx := context.TODO()
-	logPusher, err := NewBatchLogPusher(ctx, cwlogs, group, stream, batchSize)
+	logger := log.NewLogger(os.Stderr)
+	logPusher, err := NewBatchLogPusher(ctx, logger, cwlogs, group, stream, batchSize)
 	assert.NoError(t, err)
 
 	// Add 3 events.
