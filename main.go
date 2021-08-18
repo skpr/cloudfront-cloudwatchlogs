@@ -35,13 +35,9 @@ func HandleEvents(ctx context.Context, event events.S3Event) error {
 	cwLogsClient := cloudwatchlogs.NewFromConfig(cfg)
 	logger := log.NewLogger(os.Stderr)
 
-	batchSize := defaultBatchSize
-	batchSizeEnv := os.Getenv("BATCH_SIZE")
-	if batchSizeEnv != "" {
-		batchSize, err = strconv.Atoi(batchSizeEnv)
-		if err != nil {
-			return fmt.Errorf("invalid batch size %s: %w", batchSizeEnv, err)
-		}
+	batchSize, err := getBatchSize(err)
+	if err != nil {
+		return err
 	}
 
 	eventHandler := handler.NewEventHandler(logger, s3Client, cwLogsClient, batchSize)
@@ -54,4 +50,17 @@ func HandleEvents(ctx context.Context, event events.S3Event) error {
 		}
 	}
 	return nil
+}
+
+// getBatchSize gets the batch size.
+func getBatchSize(err error) (int, error) {
+	batchSize := defaultBatchSize
+	batchSizeEnv := os.Getenv("BATCH_SIZE")
+	if batchSizeEnv != "" {
+		batchSize, err = strconv.Atoi(batchSizeEnv)
+		if err != nil {
+			return 0, fmt.Errorf("invalid batch size %s: %w", batchSizeEnv, err)
+		}
+	}
+	return batchSize, nil
 }
