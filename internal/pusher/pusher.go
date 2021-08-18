@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -87,6 +88,9 @@ func (p *BatchLogPusher) Flush(ctx context.Context) error {
 	payloadSize := p.calculatePayloadSize()
 	p.log.Infof("Pushing %v log events with payload of %s", len(p.events), utils.ByteCountBinary(payloadSize))
 
+	// Sort events chronologically.
+	p.sortEvents()
+
 	input := &cloudwatchlogs.PutLogEventsInput{
 		LogGroupName:  aws.String(p.Group),
 		LogStreamName: aws.String(p.Stream),
@@ -168,4 +172,13 @@ func (p *BatchLogPusher) calculatePayloadSize() int64 {
 func (p *BatchLogPusher) clearEvents() {
 	p.events = []awstypes.InputLogEvent{}
 	p.eventsSize = 0
+}
+
+// sortEvents chronologically.
+func (p *BatchLogPusher) sortEvents() {
+	sort.Slice(p.events, func(i, j int) bool {
+		a := *p.events[i].Timestamp
+		b := *p.events[j].Timestamp
+		return a < b
+	})
 }
