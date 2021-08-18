@@ -16,6 +16,11 @@ import (
 	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/handler"
 )
 
+const (
+	// defaultBatchSize is the default batch size
+	defaultBatchSize = 1024
+)
+
 func main() {
 	lambda.Start(HandleEvents)
 }
@@ -30,7 +35,7 @@ func HandleEvents(ctx context.Context, event events.S3Event) error {
 	cwLogsClient := cloudwatchlogs.NewFromConfig(cfg)
 	logger := log.NewLogger(os.Stderr)
 
-	batchSize := 1024
+	batchSize := defaultBatchSize
 	batchSizeEnv := os.Getenv("BATCH_SIZE")
 	if batchSizeEnv != "" {
 		batchSize, err = strconv.Atoi(batchSizeEnv)
