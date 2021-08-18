@@ -112,9 +112,16 @@ func (p *BatchLogPusher) Flush(ctx context.Context) error {
 func (p *BatchLogPusher) putLogEvents(ctx context.Context, input *cloudwatchlogs.PutLogEventsInput) error {
 	_, err := p.cwLogsClient.PutLogEvents(ctx, input)
 	if err != nil {
-		if exception, ok := err.(*awstypes.InvalidSequenceTokenException); ok {
-			p.log.Infof("Refreshing token:", &input.LogGroupName, &input.LogStreamName)
-			input.SequenceToken = exception.ExpectedSequenceToken
+		var seqTokenError *awstypes.InvalidSequenceTokenException
+		if errors.As(err, &seqTokenError) {
+			p.log.Infof("Invalid token. Refreshing", &input.LogGroupName, &input.LogStreamName)
+			input.SequenceToken = seqTokenError.ExpectedSequenceToken
+			return p.putLogEvents(ctx, input)
+		}
+		var alreadyAccErr *awstypes.DataAlreadyAcceptedException
+		if errors.As(err, &alreadyAccErr) {
+			p.log.Infof("Data already accepted. Refreshing", &input.LogGroupName, &input.LogStreamName)
+			input.SequenceToken = alreadyAccErr.ExpectedSequenceToken
 			return p.putLogEvents(ctx, input)
 		}
 		return err
