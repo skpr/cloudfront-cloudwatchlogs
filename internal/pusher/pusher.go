@@ -58,7 +58,11 @@ func PutLogEvents(ctx context.Context, client types.CloudwatchLogsInterface, inp
 		return a < b
 	})
 
-	log.Printf("Sending %d logs to %s/%s with sequence token: %s", len(input.LogEvents), *input.LogGroupName, *input.LogStreamName, *input.SequenceToken)
+	if input.SequenceToken != nil {
+		log.Printf("Sending %d logs to %s/%s with sequence token: %s", len(input.LogEvents), *input.LogGroupName, *input.LogStreamName, *input.SequenceToken)
+	} else {
+		log.Printf("Sending %d logs to %s/%s", len(input.LogEvents), *input.LogGroupName, *input.LogStreamName)
+	}
 
 	resp, err := client.PutLogEvents(ctx, input)
 	if err != nil {
