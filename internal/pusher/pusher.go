@@ -46,7 +46,6 @@ func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient type
 		batchSize:    batchSize,
 	}
 	err := pusher.initialize(ctx)
-	pusher.clearEvents()
 	return pusher, err
 }
 
@@ -65,6 +64,9 @@ func (p *BatchLogPusher) initialize(ctx context.Context) error {
 
 // Add event to the cwLogsClient.
 func (p *BatchLogPusher) Add(ctx context.Context, event awstypes.InputLogEvent) error {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	p.events = append(p.events, event)
 	p.updateEventsSize(event)
 
@@ -82,9 +84,6 @@ func (p *BatchLogPusher) Flush(ctx context.Context) error {
 		return nil
 	}
 
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
 	payloadSize := p.calculatePayloadSize()
 	p.log.Infof("Pushing %v log events with payload of %s", len(p.events), utils.ByteCountBinary(payloadSize))
 
@@ -94,10 +93,15 @@ func (p *BatchLogPusher) Flush(ctx context.Context) error {
 		LogEvents:     p.events,
 	}
 
+	err := p.putLogEvents(ctx, input)
+	if err != nil {
+		return err
+	}
+
 	// Reset the events buffer.
 	p.clearEvents()
 
-	return p.putLogEvents(ctx, input)
+	return nil
 }
 
 // PutLogEvents will attempt to execute and handle invalid tokens.

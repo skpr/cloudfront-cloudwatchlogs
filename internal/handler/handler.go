@@ -23,14 +23,16 @@ type EventHandler struct {
 	log            log.Logger
 	downloadClient manager.DownloadAPIClient
 	cwLogsClient   *cloudwatchlogs.Client
+	batchSize      int
 }
 
 // NewEventHandler creates a new event handler.
-func NewEventHandler(log log.Logger, downloadClient manager.DownloadAPIClient, cwLogsClient *cloudwatchlogs.Client) *EventHandler {
+func NewEventHandler(log log.Logger, downloadClient manager.DownloadAPIClient, cwLogsClient *cloudwatchlogs.Client, batchSize int) *EventHandler {
 	return &EventHandler{
 		log:            log,
 		downloadClient: downloadClient,
 		cwLogsClient:   cwLogsClient,
+		batchSize:      batchSize,
 	}
 }
 
@@ -52,7 +54,7 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 
 	h.log.Infof("Creating log pusher")
 	logGroup, logStream := parser.ParseLogGroupAndStream(key)
-	logPusher, err := pusher.NewBatchLogPusher(ctx, h.log, h.cwLogsClient, logGroup, logStream, 256)
+	logPusher, err := pusher.NewBatchLogPusher(ctx, h.log, h.cwLogsClient, logGroup, logStream, h.batchSize)
 	if err != nil {
 		return fmt.Errorf("error creating logger: %w", err)
 	}
@@ -72,9 +74,6 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 	if err != nil {
 		return err
 	}
-
-	// Clean up our log pusher?
-	logPusher = nil
 
 	h.log.Infof("Processing complete")
 

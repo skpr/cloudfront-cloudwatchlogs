@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -29,7 +30,16 @@ func HandleEvents(ctx context.Context, event events.S3Event) error {
 	cwLogsClient := cloudwatchlogs.NewFromConfig(cfg)
 	logger := log.NewLogger(os.Stderr)
 
-	eventHandler := handler.NewEventHandler(logger, s3Client, cwLogsClient)
+	batchSize := 1024
+	batchSizeEnv := os.Getenv("BATCH_SIZE")
+	if batchSizeEnv != "" {
+		batchSize, err = strconv.Atoi(batchSizeEnv)
+		if err != nil {
+			return fmt.Errorf("invalid batch size %s: %w", batchSizeEnv, err)
+		}
+	}
+
+	eventHandler := handler.NewEventHandler(logger, s3Client, cwLogsClient, batchSize)
 
 	for _, record := range event.Records {
 		fmt.Printf("[%s - %s] Bucket = %s, Key = %s \n", record.EventSource, record.EventTime, record.S3.Bucket.Name, record.S3.Object.Key)
