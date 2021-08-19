@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"fmt"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -79,6 +81,18 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 			return pusher.PutLogEvents(ctx, h.cwLogsClient, input)
 		}
 
+		size, err := getRealSize(input)
+		if err != nil {
+			return err
+		}
+
+		log.Infoln("Current size of the payload")
+
+		// @todo, Should be configurable.
+		if size > 900000 {
+			log.Infoln("Would have sent logs because of size limit:", size)
+		}
+
 		input.LogEvents = append(input.LogEvents, event)
 
 		return nil
@@ -95,4 +109,14 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 	h.log.Infof("Processing complete")
 
 	return nil
+}
+
+func getRealSize(input *cloudwatchlogs.PutLogEventsInput) (int, error) {
+	b := new(bytes.Buffer)
+
+	if err := gob.NewEncoder(b).Encode(input.LogEvents); err != nil {
+		return 0, err
+	}
+
+	return b.Len(), nil
 }

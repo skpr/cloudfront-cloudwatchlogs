@@ -9,12 +9,17 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/aws-sdk-go/aws"
-
-	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/types"
 )
 
+// CloudwatchLogsInterface provides an interface for the cloudwatch logs cwLogsClient.
+type CloudwatchLogsInterface interface {
+	CreateLogGroup(ctx context.Context, input *cloudwatchlogs.CreateLogGroupInput, optFns ...func(options *cloudwatchlogs.Options)) (*cloudwatchlogs.CreateLogGroupOutput, error)
+	CreateLogStream(ctx context.Context, input *cloudwatchlogs.CreateLogStreamInput, optFns ...func(options *cloudwatchlogs.Options)) (*cloudwatchlogs.CreateLogStreamOutput, error)
+	PutLogEvents(ctx context.Context, input *cloudwatchlogs.PutLogEventsInput, optFns ...func(options *cloudwatchlogs.Options)) (*cloudwatchlogs.PutLogEventsOutput, error)
+}
+
 // CreateLogGroup for events to be stored.
-func CreateLogGroup(ctx context.Context, client types.CloudwatchLogsInterface, groupName string) error {
+func CreateLogGroup(ctx context.Context, client CloudwatchLogsInterface, groupName string) error {
 	_, err := client.CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
 		LogGroupName: aws.String(groupName),
 	})
@@ -30,7 +35,7 @@ func CreateLogGroup(ctx context.Context, client types.CloudwatchLogsInterface, g
 }
 
 // CreateLogStream for events to be stored.
-func CreateLogStream(ctx context.Context, client types.CloudwatchLogsInterface, groupName, streamName string) error {
+func CreateLogStream(ctx context.Context, client CloudwatchLogsInterface, groupName, streamName string) error {
 	_, err := client.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
 		LogGroupName:  aws.String(groupName),
 		LogStreamName: aws.String(streamName),
@@ -47,7 +52,7 @@ func CreateLogStream(ctx context.Context, client types.CloudwatchLogsInterface, 
 }
 
 // PutLogEvents while handling event sorting, refresh tokens and clearing events.
-func PutLogEvents(ctx context.Context, client types.CloudwatchLogsInterface, input *cloudwatchlogs.PutLogEventsInput) error {
+func PutLogEvents(ctx context.Context, client CloudwatchLogsInterface, input *cloudwatchlogs.PutLogEventsInput) error {
 	if len(input.LogEvents) == 0 {
 		return nil
 	}
