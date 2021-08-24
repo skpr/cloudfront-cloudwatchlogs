@@ -3,7 +3,6 @@ package pusher
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"sync"
 
@@ -38,7 +37,7 @@ type BatchLogPusher struct {
 }
 
 // NewBatchLogPusher creates a new batch log pusher.
-func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient types.CloudwatchLogsInterface, group, stream string, batchSize int) (*BatchLogPusher, error) {
+func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient types.CloudwatchLogsInterface, group, stream string, batchSize int) (*BatchLogPusher) {
 	pusher := &BatchLogPusher{
 		log:          logger,
 		Group:        group,
@@ -46,21 +45,7 @@ func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient type
 		cwLogsClient: cwLogsClient,
 		batchSize:    batchSize,
 	}
-	err := pusher.initialize(ctx)
-	return pusher, err
-}
-
-// initialize the log pusher by creating log groups and streams.
-func (p *BatchLogPusher) initialize(ctx context.Context) error {
-	err := p.createLogGroup(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create log group %s: %w", p.Group, err)
-	}
-	err = p.createLogStream(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create log stream %s for group %s: %w", p.Stream, p.Group, err)
-	}
-	return nil
+	return pusher
 }
 
 // Add event to the cwLogsClient.
@@ -68,12 +53,15 @@ func (p *BatchLogPusher) Add(ctx context.Context, event awstypes.InputLogEvent) 
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
+	if len(p.events) >= p.batchSize {
+		err:= p.Flush(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
 	p.events = append(p.events, event)
 	p.updateEventsSize(event)
-
-	if len(p.events) >= p.batchSize {
-		return p.Flush(ctx)
-	}
 
 	return nil
 }
@@ -123,10 +111,10 @@ func (p *BatchLogPusher) putLogEvents(ctx context.Context, input *cloudwatchlogs
 	return nil
 }
 
-// createLogGroup will attempt to create a log group and not return an error if it already exists.
-func (p *BatchLogPusher) createLogGroup(ctx context.Context) error {
+// CreateLogGroup will attempt to create a log group and not return an error if it already exists.
+func (p *BatchLogPusher) CreateLogGroup(ctx context.Context, group string) error {
 	_, err := p.cwLogsClient.CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
-		LogGroupName: aws.String(p.Group),
+		LogGroupName: aws.String(group),
 	})
 	if err != nil {
 		var awsErr *awstypes.ResourceAlreadyExistsException
@@ -139,11 +127,11 @@ func (p *BatchLogPusher) createLogGroup(ctx context.Context) error {
 	return nil
 }
 
-// createLogStream will attempt to create a log stream and not return an error if it already exists.
-func (p *BatchLogPusher) createLogStream(ctx context.Context) error {
+// CreateLogStream will attempt to create a log stream and not return an error if it already exists.
+func (p *BatchLogPusher) CreateLogStream(ctx context.Context, group, stream string) error {
 	_, err := p.cwLogsClient.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
-		LogGroupName:  aws.String(p.Group),
-		LogStreamName: aws.String(p.Stream),
+		LogGroupName:  aws.String(group),
+		LogStreamName: aws.String(stream),
 	})
 	if err != nil {
 		var awsErr *awstypes.ResourceAlreadyExistsException
