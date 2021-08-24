@@ -92,7 +92,7 @@ func (p *BatchLogPusher) Flush(ctx context.Context) error {
 
 // PutLogEvents will attempt to execute and handle invalid tokens.
 func (p *BatchLogPusher) putLogEvents(ctx context.Context) error {
-	_, err := p.cwLogsClient.PutLogEvents(ctx, p.input)
+	out, err := p.cwLogsClient.PutLogEvents(ctx, p.input)
 	if err != nil {
 		var seqTokenError *awstypes.InvalidSequenceTokenException
 		if errors.As(err, &seqTokenError) {
@@ -108,6 +108,8 @@ func (p *BatchLogPusher) putLogEvents(ctx context.Context) error {
 		}
 		return err
 	}
+	// Set the next sequence token.
+	p.input.SequenceToken = out.NextSequenceToken
 
 	return nil
 }

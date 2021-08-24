@@ -35,6 +35,7 @@ func TestBatchLogPusher_Add(t *testing.T) {
 	}
 	// Check we have 1 event in our buffer.
 	assert.Len(t, logPusher.input.LogEvents, 1)
+	assert.Equal(t, logPusher.input.SequenceToken, aws.String("abcd1234"))
 }
 
 func TestBatchLogPusher_AddMany(t *testing.T) {
