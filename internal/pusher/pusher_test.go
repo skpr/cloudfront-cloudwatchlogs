@@ -25,7 +25,7 @@ func TestBatchLogPusher_Add(t *testing.T) {
 	logger := log.NewLogger(os.Stderr)
 	logPusher := NewBatchLogPusher(ctx, logger, cwlogs, group, stream, batchSize)
 
-	// Add 4 events, triggering a batch push at 3.
+	// Add 4 events, triggering a batch push, because we add _after_ checking batch size and pushing.
 	for i := 0; i < 4; i++ {
 		err := logPusher.Add(ctx, types.InputLogEvent{
 			Message:   aws.String("foo"),
