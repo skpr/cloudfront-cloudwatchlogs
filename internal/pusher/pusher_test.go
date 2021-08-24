@@ -25,17 +25,16 @@ func TestBatchLogPusher_Add(t *testing.T) {
 	logger := log.NewLogger(os.Stderr)
 	logPusher := NewBatchLogPusher(ctx, logger, cwlogs, group, stream, batchSize)
 
-	// Add 3 events.
-	for i := 0; i < 3; i++ {
+	// Add 4 events, triggering a batch push at 3.
+	for i := 0; i < 4; i++ {
 		err := logPusher.Add(ctx, types.InputLogEvent{
 			Message:   aws.String("foo"),
 			Timestamp: aws.Int64(time.Now().UnixNano() / int64(time.Millisecond/time.Nanosecond)),
 		})
 		assert.NoError(t, err)
 	}
-	// Check we have no events in our buffer.
-	assert.Empty(t, logPusher.events)
-
+	// Check we have 1 event in our buffer.
+	assert.Len(t, logPusher.input.LogEvents, 1)
 }
 
 func TestBatchLogPusher_AddMany(t *testing.T) {

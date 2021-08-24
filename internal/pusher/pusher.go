@@ -22,14 +22,10 @@ type BatchLogPusher struct {
 	log log.Logger
 	// BatchLogPusher for interacting with CloudWatch Logs.
 	cwLogsClient types.CloudwatchLogsInterface
-	// Group which events will be pushed to.
-	Group string
-	// Stream which events will be pushed to.
-	Stream string
 	// Amount of events to keep before flushing.
 	batchSize int
-	// Events stored in memory before being pushed.
-	events []awstypes.InputLogEvent
+	// input is the put log events input.
+	input *cloudwatchlogs.PutLogEventsInput
 	// eventsSize of the current batch in bytes.
 	eventsSize int64
 	// Lock to ensure logs are handled by only 1 process.
@@ -40,8 +36,12 @@ type BatchLogPusher struct {
 func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient types.CloudwatchLogsInterface, group, stream string, batchSize int) (*BatchLogPusher) {
 	pusher := &BatchLogPusher{
 		log:          logger,
-		Group:        group,
-		Stream:       stream,
+		input: &cloudwatchlogs.PutLogEventsInput{
+			LogEvents:     []awstypes.InputLogEvent{},
+			LogGroupName:  aws.String(group),
+			LogStreamName: aws.String(stream),
+			SequenceToken: nil,
+		},
 		cwLogsClient: cwLogsClient,
 		batchSize:    batchSize,
 	}
@@ -53,14 +53,14 @@ func (p *BatchLogPusher) Add(ctx context.Context, event awstypes.InputLogEvent) 
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	if len(p.events) >= p.batchSize {
+	if len(p.input.LogEvents) >= p.batchSize {
 		err:= p.Flush(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
-	p.events = append(p.events, event)
+	p.input.LogEvents = append(p.input.LogEvents, event)
 	p.updateEventsSize(event)
 
 	return nil
@@ -69,23 +69,17 @@ func (p *BatchLogPusher) Add(ctx context.Context, event awstypes.InputLogEvent) 
 // Flush events stored in the cwLogsClient.
 func (p *BatchLogPusher) Flush(ctx context.Context) error {
 	// Return early if there are no events to push.
-	if len(p.events) == 0 {
+	if len(p.input.LogEvents) == 0 {
 		return nil
 	}
 
 	payloadSize := p.calculatePayloadSize()
-	p.log.Infof("Pushing %v log events with payload of %s", len(p.events), utils.ByteCountBinary(payloadSize))
+	p.log.Infof("Pushing %v log events with payload of %s", len(p.input.LogEvents), utils.ByteCountBinary(payloadSize))
 
 	// Sort events chronologically.
 	p.sortEvents()
 
-	input := &cloudwatchlogs.PutLogEventsInput{
-		LogGroupName:  aws.String(p.Group),
-		LogStreamName: aws.String(p.Stream),
-		LogEvents:     p.events,
-	}
-
-	err := p.putLogEvents(ctx, input)
+	err := p.putLogEvents(ctx)
 	if err != nil {
 		return err
 	}
@@ -97,13 +91,13 @@ func (p *BatchLogPusher) Flush(ctx context.Context) error {
 }
 
 // PutLogEvents will attempt to execute and handle invalid tokens.
-func (p *BatchLogPusher) putLogEvents(ctx context.Context, input *cloudwatchlogs.PutLogEventsInput) error {
-	_, err := p.cwLogsClient.PutLogEvents(ctx, input)
+func (p *BatchLogPusher) putLogEvents(ctx context.Context) error {
+	_, err := p.cwLogsClient.PutLogEvents(ctx, p.input)
 	if err != nil {
 		if exception, ok := err.(*awstypes.InvalidSequenceTokenException); ok {
-			p.log.Infof("Refreshing token:", &input.LogGroupName, &input.LogStreamName)
-			input.SequenceToken = exception.ExpectedSequenceToken
-			return p.putLogEvents(ctx, input)
+			p.log.Infof("Refreshing token:", &p.input.LogGroupName, &p.input.LogStreamName)
+			p.input.SequenceToken = exception.ExpectedSequenceToken
+			return p.putLogEvents(ctx)
 		}
 		return err
 	}
@@ -152,21 +146,21 @@ func (p *BatchLogPusher) updateEventsSize(event awstypes.InputLogEvent) {
 // calculatePayloadSize calculates the approximate payload size.
 func (p *BatchLogPusher) calculatePayloadSize() int64 {
 	// size is calculated as the sum of all event messages in UTF-8, plus 26 bytes for each log event.
-	bytesOverhead := (len(p.events) + 1) * 26
+	bytesOverhead := (len(p.input.LogEvents) + 1) * 26
 	return p.eventsSize + int64(bytesOverhead)
 }
 
 // clearEvents clears the events buffer.
 func (p *BatchLogPusher) clearEvents() {
-	p.events = []awstypes.InputLogEvent{}
+	p.input.LogEvents = []awstypes.InputLogEvent{}
 	p.eventsSize = 0
 }
 
 // sortEvents chronologically.
 func (p *BatchLogPusher) sortEvents() {
-	sort.Slice(p.events, func(i, j int) bool {
-		a := *p.events[i].Timestamp
-		b := *p.events[j].Timestamp
+	sort.Slice(p.input.LogEvents, func(i, j int) bool {
+		a := *p.input.LogEvents[i].Timestamp
+		b := *p.input.LogEvents[j].Timestamp
 		return a < b
 	})
 }
