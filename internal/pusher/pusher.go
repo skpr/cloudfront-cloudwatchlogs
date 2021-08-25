@@ -3,7 +3,6 @@ package pusher
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"sync"
 
@@ -23,14 +22,10 @@ type BatchLogPusher struct {
 	log log.Logger
 	// BatchLogPusher for interacting with CloudWatch Logs.
 	cwLogsClient types.CloudwatchLogsInterface
-	// Group which events will be pushed to.
-	Group string
-	// Stream which events will be pushed to.
-	Stream string
 	// Amount of events to keep before flushing.
 	batchSize int
-	// Events stored in memory before being pushed.
-	events []awstypes.InputLogEvent
+	// input is the put log events input.
+	input *cloudwatchlogs.PutLogEventsInput
 	// eventsSize of the current batch in bytes.
 	eventsSize int64
 	// Lock to ensure logs are handled by only 1 process.
@@ -38,29 +33,19 @@ type BatchLogPusher struct {
 }
 
 // NewBatchLogPusher creates a new batch log pusher.
-func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient types.CloudwatchLogsInterface, group, stream string, batchSize int) (*BatchLogPusher, error) {
+func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient types.CloudwatchLogsInterface, group, stream string, batchSize int) (*BatchLogPusher) {
 	pusher := &BatchLogPusher{
 		log:          logger,
-		Group:        group,
-		Stream:       stream,
+		input: &cloudwatchlogs.PutLogEventsInput{
+			LogEvents:     []awstypes.InputLogEvent{},
+			LogGroupName:  aws.String(group),
+			LogStreamName: aws.String(stream),
+			SequenceToken: nil,
+		},
 		cwLogsClient: cwLogsClient,
 		batchSize:    batchSize,
 	}
-	err := pusher.initialize(ctx)
-	return pusher, err
-}
-
-// initialize the log pusher by creating log groups and streams.
-func (p *BatchLogPusher) initialize(ctx context.Context) error {
-	err := p.createLogGroup(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create log group %s: %w", p.Group, err)
-	}
-	err = p.createLogStream(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create log stream %s for group %s: %w", p.Stream, p.Group, err)
-	}
-	return nil
+	return pusher
 }
 
 // Add event to the cwLogsClient.
@@ -68,12 +53,15 @@ func (p *BatchLogPusher) Add(ctx context.Context, event awstypes.InputLogEvent) 
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	p.events = append(p.events, event)
-	p.updateEventsSize(event)
-
-	if len(p.events) >= p.batchSize {
-		return p.Flush(ctx)
+	if len(p.input.LogEvents) >= p.batchSize {
+		err:= p.Flush(ctx)
+		if err != nil {
+			return err
+		}
 	}
+
+	p.input.LogEvents = append(p.input.LogEvents, event)
+	p.updateEventsSize(event)
 
 	return nil
 }
@@ -81,23 +69,17 @@ func (p *BatchLogPusher) Add(ctx context.Context, event awstypes.InputLogEvent) 
 // Flush events stored in the cwLogsClient.
 func (p *BatchLogPusher) Flush(ctx context.Context) error {
 	// Return early if there are no events to push.
-	if len(p.events) == 0 {
+	if len(p.input.LogEvents) == 0 {
 		return nil
 	}
 
 	payloadSize := p.calculatePayloadSize()
-	p.log.Infof("Pushing %v log events with payload of %s", len(p.events), utils.ByteCountBinary(payloadSize))
+	p.log.Infof("Pushing %v log events with payload of %s", len(p.input.LogEvents), utils.ByteCountBinary(payloadSize))
 
 	// Sort events chronologically.
 	p.sortEvents()
 
-	input := &cloudwatchlogs.PutLogEventsInput{
-		LogGroupName:  aws.String(p.Group),
-		LogStreamName: aws.String(p.Stream),
-		LogEvents:     p.events,
-	}
-
-	err := p.putLogEvents(ctx, input)
+	err := p.putLogEvents(ctx)
 	if err != nil {
 		return err
 	}
@@ -109,24 +91,33 @@ func (p *BatchLogPusher) Flush(ctx context.Context) error {
 }
 
 // PutLogEvents will attempt to execute and handle invalid tokens.
-func (p *BatchLogPusher) putLogEvents(ctx context.Context, input *cloudwatchlogs.PutLogEventsInput) error {
-	_, err := p.cwLogsClient.PutLogEvents(ctx, input)
+func (p *BatchLogPusher) putLogEvents(ctx context.Context) error {
+	out, err := p.cwLogsClient.PutLogEvents(ctx, p.input)
 	if err != nil {
-		if exception, ok := err.(*awstypes.InvalidSequenceTokenException); ok {
-			p.log.Infof("Refreshing token:", &input.LogGroupName, &input.LogStreamName)
-			input.SequenceToken = exception.ExpectedSequenceToken
-			return p.putLogEvents(ctx, input)
+		var seqTokenError *awstypes.InvalidSequenceTokenException
+		if errors.As(err, &seqTokenError) {
+			p.log.Infof("Invalid token. Refreshing", &p.input.LogGroupName, &p.input.LogStreamName)
+			p.input.SequenceToken = seqTokenError.ExpectedSequenceToken
+			return p.putLogEvents(ctx)
+		}
+		var alreadyAccErr *awstypes.DataAlreadyAcceptedException
+		if errors.As(err, &alreadyAccErr) {
+			p.log.Infof("Data already accepted. Refreshing", &p.input.LogGroupName, &p.input.LogStreamName)
+			p.input.SequenceToken = alreadyAccErr.ExpectedSequenceToken
+			return p.putLogEvents(ctx)
 		}
 		return err
 	}
+	// Set the next sequence token.
+	p.input.SequenceToken = out.NextSequenceToken
 
 	return nil
 }
 
-// createLogGroup will attempt to create a log group and not return an error if it already exists.
-func (p *BatchLogPusher) createLogGroup(ctx context.Context) error {
+// CreateLogGroup will attempt to create a log group and not return an error if it already exists.
+func (p *BatchLogPusher) CreateLogGroup(ctx context.Context, group string) error {
 	_, err := p.cwLogsClient.CreateLogGroup(ctx, &cloudwatchlogs.CreateLogGroupInput{
-		LogGroupName: aws.String(p.Group),
+		LogGroupName: aws.String(group),
 	})
 	if err != nil {
 		var awsErr *awstypes.ResourceAlreadyExistsException
@@ -139,11 +130,11 @@ func (p *BatchLogPusher) createLogGroup(ctx context.Context) error {
 	return nil
 }
 
-// createLogStream will attempt to create a log stream and not return an error if it already exists.
-func (p *BatchLogPusher) createLogStream(ctx context.Context) error {
+// CreateLogStream will attempt to create a log stream and not return an error if it already exists.
+func (p *BatchLogPusher) CreateLogStream(ctx context.Context, group, stream string) error {
 	_, err := p.cwLogsClient.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
-		LogGroupName:  aws.String(p.Group),
-		LogStreamName: aws.String(p.Stream),
+		LogGroupName:  aws.String(group),
+		LogStreamName: aws.String(stream),
 	})
 	if err != nil {
 		var awsErr *awstypes.ResourceAlreadyExistsException
@@ -164,21 +155,21 @@ func (p *BatchLogPusher) updateEventsSize(event awstypes.InputLogEvent) {
 // calculatePayloadSize calculates the approximate payload size.
 func (p *BatchLogPusher) calculatePayloadSize() int64 {
 	// size is calculated as the sum of all event messages in UTF-8, plus 26 bytes for each log event.
-	bytesOverhead := (len(p.events) + 1) * 26
+	bytesOverhead := (len(p.input.LogEvents) + 1) * 26
 	return p.eventsSize + int64(bytesOverhead)
 }
 
 // clearEvents clears the events buffer.
 func (p *BatchLogPusher) clearEvents() {
-	p.events = []awstypes.InputLogEvent{}
+	p.input.LogEvents = []awstypes.InputLogEvent{}
 	p.eventsSize = 0
 }
 
 // sortEvents chronologically.
 func (p *BatchLogPusher) sortEvents() {
-	sort.Slice(p.events, func(i, j int) bool {
-		a := *p.events[i].Timestamp
-		b := *p.events[j].Timestamp
+	sort.Slice(p.input.LogEvents, func(i, j int) bool {
+		a := *p.input.LogEvents[i].Timestamp
+		b := *p.input.LogEvents[j].Timestamp
 		return a < b
 	})
 }

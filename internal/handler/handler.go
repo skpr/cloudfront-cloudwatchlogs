@@ -54,9 +54,16 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 
 	h.log.Infof("Creating log pusher")
 	logGroup, logStream := parser.ParseLogGroupAndStream(key)
-	logPusher, err := pusher.NewBatchLogPusher(ctx, h.log, h.cwLogsClient, logGroup, logStream, h.batchSize)
-	if err != nil {
-		return fmt.Errorf("error creating logger: %w", err)
+	logPusher := pusher.NewBatchLogPusher(ctx, h.log, h.cwLogsClient, logGroup, logStream, h.batchSize)
+
+	h.log.Infof("Creating log group")
+	if err := logPusher.CreateLogGroup(ctx, logGroup); err != nil {
+		return err
+	}
+
+	h.log.Infof("Creating log stream")
+	if err := logPusher.CreateLogStream(ctx, logGroup, logStream); err != nil {
+		return err
 	}
 
 	h.log.Infof("Processing logs")

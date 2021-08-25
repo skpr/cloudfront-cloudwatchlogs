@@ -23,20 +23,19 @@ func TestBatchLogPusher_Add(t *testing.T) {
 	batchSize := 3
 	ctx := context.TODO()
 	logger := log.NewLogger(os.Stderr)
-	logPusher, err := NewBatchLogPusher(ctx, logger, cwlogs, group, stream, batchSize)
-	assert.NoError(t, err)
+	logPusher := NewBatchLogPusher(ctx, logger, cwlogs, group, stream, batchSize)
 
-	// Add 3 events.
-	for i := 0; i < 3; i++ {
-		err = logPusher.Add(ctx, types.InputLogEvent{
+	// Add 4 events, triggering a batch push, because we add _after_ checking batch size and pushing.
+	for i := 0; i < 4; i++ {
+		err := logPusher.Add(ctx, types.InputLogEvent{
 			Message:   aws.String("foo"),
 			Timestamp: aws.Int64(time.Now().UnixNano() / int64(time.Millisecond/time.Nanosecond)),
 		})
 		assert.NoError(t, err)
 	}
-	// Check we have no events in our buffer.
-	assert.Empty(t, logPusher.events)
-
+	// Check we have 1 event in our buffer.
+	assert.Len(t, logPusher.input.LogEvents, 1)
+	assert.Equal(t, *logPusher.input.SequenceToken, "abcd1234")
 }
 
 func TestBatchLogPusher_AddMany(t *testing.T) {
@@ -48,12 +47,11 @@ func TestBatchLogPusher_AddMany(t *testing.T) {
 	batchSize := 3
 	ctx := context.TODO()
 	logger := log.NewLogger(os.Stderr)
-	logPusher, err := NewBatchLogPusher(ctx, logger, cwlogs, group, stream, batchSize)
-	assert.NoError(t, err)
+	logPusher := NewBatchLogPusher(ctx, logger, cwlogs, group, stream, batchSize)
 
 	// Add 3 events.
 	for i := 0; i < 10_000_000; i++ {
-		err = logPusher.Add(ctx, types.InputLogEvent{
+		err := logPusher.Add(ctx, types.InputLogEvent{
 			Message:   aws.String("foo"),
 			Timestamp: aws.Int64(time.Now().UnixNano() / int64(time.Millisecond/time.Nanosecond)),
 		})
