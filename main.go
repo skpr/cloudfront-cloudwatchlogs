@@ -15,7 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/prometheus/common/log"
 
-	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/handler"
+	"github.com/skpr/cloudfront-cloudwatchlogs/internal/handler"
 )
 
 const (

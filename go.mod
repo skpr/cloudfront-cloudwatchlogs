@@ -1,4 +1,4 @@
-module github.com/codedropau/cloudfront-cloudwatchlogs
+module github.com/skpr/cloudfront-cloudwatchlogs
 
 go 1.19
 
