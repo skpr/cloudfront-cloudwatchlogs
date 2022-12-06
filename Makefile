@@ -20,7 +20,7 @@ test:
 	go test -cover ./...
 
 build:
-	GOOS=linux go build -o ${OUTPUT} main.go
+	GOARCH=amd64 GOOS=linux go build -o ${OUTPUT} main.go
 
 # https://docs.aws.amazon.com/lambda/latest/dg/golang-package.html
 package: build
