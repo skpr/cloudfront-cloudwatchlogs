@@ -11,8 +11,8 @@ import (
 	awstypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/prometheus/common/log"
 
-	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/types"
-	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/utils"
+	"github.com/skpr/cloudfront-cloudwatchlogs/internal/types"
+	"github.com/skpr/cloudfront-cloudwatchlogs/internal/utils"
 )
 
 // BatchLogPusher cwLogsClient for handling log events.
@@ -33,9 +33,9 @@ type BatchLogPusher struct {
 }
 
 // NewBatchLogPusher creates a new batch log pusher.
-func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient types.CloudwatchLogsInterface, group, stream string, batchSize int) (*BatchLogPusher) {
+func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient types.CloudwatchLogsInterface, group, stream string, batchSize int) *BatchLogPusher {
 	pusher := &BatchLogPusher{
-		log:          logger,
+		log: logger,
 		input: &cloudwatchlogs.PutLogEventsInput{
 			LogEvents:     []awstypes.InputLogEvent{},
 			LogGroupName:  aws.String(group),
@@ -54,7 +54,7 @@ func (p *BatchLogPusher) Add(ctx context.Context, event awstypes.InputLogEvent) 
 	defer p.lock.Unlock()
 
 	if len(p.input.LogEvents) >= p.batchSize {
-		err:= p.Flush(ctx)
+		err := p.Flush(ctx)
 		if err != nil {
 			return err
 		}

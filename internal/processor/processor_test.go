@@ -4,10 +4,9 @@ import (
 	"io/ioutil"
 	"testing"
 
-
 	"github.com/stretchr/testify/assert"
 
-	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/processor/mock"
+	"github.com/skpr/cloudfront-cloudwatchlogs/internal/processor/mock"
 )
 
 func TestProcessLines(t *testing.T) {

@@ -12,10 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/prometheus/common/log"
 
-	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/parser"
-	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/processor"
-	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/pusher"
-	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/utils"
+	"github.com/skpr/cloudfront-cloudwatchlogs/internal/parser"
+	"github.com/skpr/cloudfront-cloudwatchlogs/internal/processor"
+	"github.com/skpr/cloudfront-cloudwatchlogs/internal/pusher"
+	"github.com/skpr/cloudfront-cloudwatchlogs/internal/utils"
 )
 
 // EventHandler defines the event handler.

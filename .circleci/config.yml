@@ -19,25 +19,25 @@ workflows:
 jobs:
   lint:
     docker:
-      - image: golang:1.16
-    working_directory: /go/src/github.com/codedropau/cloudfront-cloudwatchlogs
+      - image: golang:1.19
+    working_directory: /go/src/github.com/skpr/cloudfront-cloudwatchlogs
     steps:
       - checkout
       - run: |
-          go get golang.org/x/lint/golint
+          go install golang.org/x/lint/golint@latest
           make lint
 
   test:
     docker:
-      - image: golang:1.16
-    working_directory: /go/src/github.com/codedropau/cloudfront-cloudwatchlogs
+      - image: golang:1.19
+    working_directory: /go/src/github.com/skpr/cloudfront-cloudwatchlogs
     steps:
       - checkout
       - run: make test
 
   release:
     docker:
-      - image: golang:1.16
+      - image: golang:1.19
     steps:
       - checkout
       - run:
