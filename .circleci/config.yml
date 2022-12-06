@@ -24,7 +24,7 @@ jobs:
     steps:
       - checkout
       - run: |
-          go install golang.org/x/lint/golint
+          go install golang.org/x/lint/golint@latest
           make lint
 
   test:
