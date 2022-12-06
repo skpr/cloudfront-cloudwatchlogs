@@ -44,7 +44,7 @@ jobs:
           name: "Install Dependencies"
           command: |
             apt-get update && apt-get install -y zip
-            go get github.com/tcnksm/ghr
+            go install github.com/tcnksm/ghr@latest
       - run:
           name: "Build"
           command: make package
