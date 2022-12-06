@@ -13,7 +13,7 @@ import (
 	"github.com/prometheus/common/log"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/codedropau/cloudfront-cloudwatchlogs/internal/pusher/mock"
+	"github.com/skpr/cloudfront-cloudwatchlogs/internal/pusher/mock"
 )
 
 func TestBatchLogPusher_Add(t *testing.T) {
