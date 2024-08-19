@@ -44,7 +44,7 @@ func HandleEvents(ctx context.Context, event events.SNSEvent) error {
 	})
 	logger := log.NewLogger(os.Stderr)
 
-	batchSize, err := getBatchSize(err)
+	batchSize, err := getBatchSize()
 	if err != nil {
 		return err
 	}
@@ -72,17 +72,12 @@ func HandleEvents(ctx context.Context, event events.SNSEvent) error {
 }
 
 // getBatchSize gets the batch size.
-func getBatchSize(err error) (int, error) {
-	batchSize := defaultBatchSize
-
+func getBatchSize() (int, error) {
 	batchSizeEnv := os.Getenv("BATCH_SIZE")
 
 	if batchSizeEnv != "" {
-		batchSize, err = strconv.Atoi(batchSizeEnv)
-		if err != nil {
-			return 0, fmt.Errorf("invalid batch size %s: %w", batchSizeEnv, err)
-		}
+		return strconv.Atoi(batchSizeEnv)
 	}
 
-	return batchSize, nil
+	return defaultBatchSize, nil
 }
