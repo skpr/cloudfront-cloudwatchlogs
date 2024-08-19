@@ -18,6 +18,11 @@ import (
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/utils"
 )
 
+const (
+	// LogStreamName is the name of the log stream where all events will be pushed to.
+	LogStreamName = "cloudfront"
+)
+
 // EventHandler defines the event handler.
 type EventHandler struct {
 	log            log.Logger
@@ -53,8 +58,8 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 	h.log.Infof("Fetched %s from %s from %s", utils.ByteCountBinary(n), key, bucket)
 
 	h.log.Infof("Creating log pusher")
-	logGroup, logStream := parser.ParseLogGroupAndStream(key)
-	logPusher := pusher.NewBatchLogPusher(ctx, h.log, h.cwLogsClient, logGroup, logStream, h.batchSize)
+	logGroup := parser.GetLogGroupName(key)
+	logPusher := pusher.NewBatchLogPusher(ctx, h.log, h.cwLogsClient, logGroup, LogStreamName, h.batchSize)
 
 	h.log.Infof("Creating log group")
 	if err := logPusher.CreateLogGroup(ctx, logGroup); err != nil {
@@ -62,7 +67,7 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 	}
 
 	h.log.Infof("Creating log stream")
-	if err := logPusher.CreateLogStream(ctx, logGroup, logStream); err != nil {
+	if err := logPusher.CreateLogStream(ctx, logGroup, LogStreamName); err != nil {
 		return err
 	}
 

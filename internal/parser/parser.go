@@ -27,26 +27,20 @@ func ParseDateAndMessage(line string) (time.Time, string, error) {
 	return date, message, err
 }
 
-// ParseLogGroupAndStream from the s3 object key.
-func ParseLogGroupAndStream(key string) (string, string) {
-	var (
-		logGroup  string
-		logStream string
-	)
+// GetLogGroupName from the s3 object key.
+func GetLogGroupName(key string) string {
 	sep := "/"
+
 	// Split the key up by slash.
 	keyParts := strings.Split(key, sep)
-	// Filename is the last part of the key.
-	filename := keyParts[len(keyParts)-1]
+
 	// LogGroup is the whole key excluding the filename.
-	logGroup = strings.Join(keyParts[:len(keyParts)-1], sep)
+	logGroup := strings.Join(keyParts[:len(keyParts)-1], sep)
+
 	// Ensure the logGroup is prefixed with a slash.
 	if !strings.HasPrefix(logGroup, "/") {
 		logGroup = fmt.Sprintf("/%s", logGroup)
 	}
-	// LogStream is all parts of the filename without the extension.
-	sep = "."
-	filenameParts := strings.Split(filename, sep)
-	logStream = strings.Join(filenameParts[:len(filenameParts)-1], sep)
-	return logGroup, logStream
+
+	return logGroup
 }

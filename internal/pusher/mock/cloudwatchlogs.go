@@ -3,7 +3,6 @@ package mock
 import (
 	"context"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/types"
@@ -31,8 +30,6 @@ func (l CloudwatchLogs) CreateLogStream(ctx context.Context, params *cloudwatchl
 
 // PutLogEvents implements the interface.
 func (l CloudwatchLogs) PutLogEvents(ctx context.Context, params *cloudwatchlogs.PutLogEventsInput, optFns ...func(options *cloudwatchlogs.Options)) (*cloudwatchlogs.PutLogEventsOutput, error) {
-	out := &cloudwatchlogs.PutLogEventsOutput{
-		NextSequenceToken: aws.String("abcd1234"),
-	}
+	out := &cloudwatchlogs.PutLogEventsOutput{}
 	return out, nil
 }
