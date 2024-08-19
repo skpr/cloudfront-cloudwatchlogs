@@ -27,4 +27,4 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          files: lambda-handler.zip
+          files: function.zip
