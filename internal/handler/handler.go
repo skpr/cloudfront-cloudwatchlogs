@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -10,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/prometheus/common/log"
 
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/parser"
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/processor"
@@ -25,14 +25,14 @@ const (
 
 // EventHandler defines the event handler.
 type EventHandler struct {
-	log            log.Logger
+	log            *slog.Logger
 	downloadClient manager.DownloadAPIClient
 	cwLogsClient   *cloudwatchlogs.Client
 	batchSize      int
 }
 
 // NewEventHandler creates a new event handler.
-func NewEventHandler(log log.Logger, downloadClient manager.DownloadAPIClient, cwLogsClient *cloudwatchlogs.Client, batchSize int) *EventHandler {
+func NewEventHandler(log *slog.Logger, downloadClient manager.DownloadAPIClient, cwLogsClient *cloudwatchlogs.Client, batchSize int) *EventHandler {
 	return &EventHandler{
 		log:            log,
 		downloadClient: downloadClient,
@@ -55,23 +55,23 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 	if err != nil {
 		return fmt.Errorf("failed to download %s from %s: %w", key, bucket, err)
 	}
-	h.log.Infof("Fetched %s from %s from %s", utils.ByteCountBinary(n), key, bucket)
+	h.log.Info(fmt.Sprintf("Fetched %s from %s from %s", utils.ByteCountBinary(n), key, bucket))
 
-	h.log.Infof("Creating log pusher")
+	h.log.Info("Creating log pusher")
 	logGroup := parser.GetLogGroupName(key)
 	logPusher := pusher.NewBatchLogPusher(ctx, h.log, h.cwLogsClient, logGroup, LogStreamName, h.batchSize)
 
-	h.log.Infof("Creating log group")
+	h.log.Info("Creating log group")
 	if err := logPusher.CreateLogGroup(ctx, logGroup); err != nil {
 		return err
 	}
 
-	h.log.Infof("Creating log stream")
+	h.log.Info("Creating log stream")
 	if err := logPusher.CreateLogStream(ctx, logGroup, LogStreamName); err != nil {
 		return err
 	}
 
-	h.log.Infof("Processing logs")
+	h.log.Info("Processing logs")
 	err = processor.ProcessLines(gzipBuff.Bytes(), func(event types.InputLogEvent) error {
 		err = logPusher.Add(ctx, event)
 		if err != nil {
@@ -87,7 +87,7 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 		return err
 	}
 
-	h.log.Infof("Processing complete")
+	h.log.Info("Processing complete")
 
 	return nil
 }

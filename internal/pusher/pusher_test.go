@@ -3,6 +3,7 @@ package pusher
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 	"testing"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
-	"github.com/prometheus/common/log"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/pusher/mock"
@@ -22,7 +22,7 @@ func TestBatchLogPusher_Add(t *testing.T) {
 	stream := "bar"
 	batchSize := 3
 	ctx := context.TODO()
-	logger := log.NewLogger(os.Stderr)
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	logPusher := NewBatchLogPusher(ctx, logger, cwlogs, group, stream, batchSize)
 
 	// Add 4 events, triggering a batch push, because we add _after_ checking batch size and pushing.
@@ -45,7 +45,7 @@ func TestBatchLogPusher_AddMany(t *testing.T) {
 	stream := "bar"
 	batchSize := 3
 	ctx := context.TODO()
-	logger := log.NewLogger(os.Stderr)
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	logPusher := NewBatchLogPusher(ctx, logger, cwlogs, group, stream, batchSize)
 
 	// Add 3 events.
