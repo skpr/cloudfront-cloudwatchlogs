@@ -45,7 +45,7 @@ func NewEventHandler(log *slog.Logger, downloadClient manager.DownloadAPIClient,
 func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRecord) error {
 	key := record.S3.Object.Key
 	bucket := record.S3.Bucket.Name
-	h.log.Infof("Downloading logs %s from s3 bucket %s", key, bucket)
+	h.log.Info(fmt.Sprintf("Downloading logs %s from s3 bucket %s", key, bucket))
 	downloader := manager.NewDownloader(h.downloadClient)
 	gzipBuff := manager.NewWriteAtBuffer([]byte{})
 	n, err := downloader.Download(ctx, gzipBuff, &s3.GetObjectInput{
