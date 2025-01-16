@@ -100,7 +100,8 @@ func WithDownloaderClientOptions(opts ...func(*s3.Options)) func(*Downloader) {
 // interface.
 //
 // Example:
-// 	// Load AWS Config
+//
+//	// Load AWS Config
 //	cfg, err := config.LoadDefaultConfig(context.TODO())
 //	if err != nil {
 //		panic(err)
@@ -153,6 +154,7 @@ func NewDownloader(c DownloadAPIClient, options ...func(*Downloader)) *Downloade
 // and GC runs.
 //
 // Example:
+//
 //	// pre-allocate in memory buffer, where headObject type is *s3.HeadObjectOutput
 //	buf := make([]byte, int(headObject.ContentLength))
 //	// wrap with aws.WriteAtBuffer
@@ -181,7 +183,10 @@ func (d Downloader) Download(ctx context.Context, w io.WriterAt, input *s3.GetOb
 	// Copy ClientOptions
 	clientOptions := make([]func(*s3.Options), 0, len(impl.cfg.ClientOptions)+1)
 	clientOptions = append(clientOptions, func(o *s3.Options) {
-		o.APIOptions = append(o.APIOptions, middleware.AddSDKAgentKey(middleware.FeatureMetadata, userAgentKey))
+		o.APIOptions = append(o.APIOptions,
+			middleware.AddSDKAgentKey(middleware.FeatureMetadata, userAgentKey),
+			addFeatureUserAgent, // yes, there are two of these
+		)
 	})
 	clientOptions = append(clientOptions, impl.cfg.ClientOptions...)
 	impl.cfg.ClientOptions = clientOptions
@@ -348,16 +353,16 @@ func (d *downloader) downloadRange(rng string) {
 
 // downloadChunk downloads the chunk from s3
 func (d *downloader) downloadChunk(chunk dlchunk) error {
-	in := &s3.GetObjectInput{}
-	awsutil.Copy(in, d.in)
+	var params s3.GetObjectInput
+	awsutil.Copy(&params, d.in)
 
 	// Get the next byte range of data
-	in.Range = aws.String(chunk.ByteRange())
+	params.Range = aws.String(chunk.ByteRange())
 
 	var n int64
 	var err error
 	for retry := 0; retry <= d.partBodyMaxRetries; retry++ {
-		n, err = d.tryDownloadChunk(in, &chunk)
+		n, err = d.tryDownloadChunk(&params, &chunk)
 		if err == nil {
 			break
 		}
@@ -374,8 +379,9 @@ func (d *downloader) downloadChunk(chunk dlchunk) error {
 
 		chunk.cur = 0
 
-		d.cfg.Logger.Logf(logging.Debug, "object part body download interrupted %s, err, %v, retrying attempt %d",
-			aws.ToString(in.Key), err, retry)
+		d.cfg.Logger.Logf(logging.Debug,
+			"object part body download interrupted %s, err, %v, retrying attempt %d",
+			aws.ToString(params.Key), err, retry)
 	}
 
 	d.incrWritten(n)
@@ -383,20 +389,24 @@ func (d *downloader) downloadChunk(chunk dlchunk) error {
 	return err
 }
 
-func (d *downloader) tryDownloadChunk(in *s3.GetObjectInput, w io.Writer) (int64, error) {
+func (d *downloader) tryDownloadChunk(params *s3.GetObjectInput, w io.Writer) (int64, error) {
 	cleanup := func() {}
 	if d.cfg.BufferProvider != nil {
 		w, cleanup = d.cfg.BufferProvider.GetReadFrom(w)
 	}
 	defer cleanup()
 
-	resp, err := d.cfg.S3.GetObject(d.ctx, in, d.cfg.ClientOptions...)
+	resp, err := d.cfg.S3.GetObject(d.ctx, params, d.cfg.ClientOptions...)
 	if err != nil {
 		return 0, err
 	}
 	d.setTotalBytes(resp) // Set total if not yet set.
 
-	n, err := io.Copy(w, resp.Body)
+	var src io.Reader = resp.Body
+	if d.cfg.BufferProvider != nil {
+		src = &suppressWriterAt{suppressed: src}
+	}
+	n, err := io.Copy(w, src)
 	resp.Body.Close()
 	if err != nil {
 		return n, &errReadingBody{err: err}
@@ -429,8 +439,8 @@ func (d *downloader) setTotalBytes(resp *s3.GetObjectOutput) {
 	if resp.ContentRange == nil {
 		// ContentRange is nil when the full file contents is provided, and
 		// is not chunked. Use ContentLength instead.
-		if resp.ContentLength > 0 {
-			d.totalBytes = resp.ContentLength
+		if aws.ToInt64(resp.ContentLength) > 0 {
+			d.totalBytes = aws.ToInt64(resp.ContentLength)
 			return
 		}
 	} else {

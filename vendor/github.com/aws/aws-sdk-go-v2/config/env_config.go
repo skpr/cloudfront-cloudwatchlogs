@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
 	"io"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/ec2/imds"
+	smithyrequestcompression "github.com/aws/smithy-go/private/requestcompression"
 )
 
 // CredentialsSourceName provides a name of the provider when config is
@@ -56,7 +58,34 @@ const (
 
 	awsEc2MetadataServiceEndpointEnvVar = "AWS_EC2_METADATA_SERVICE_ENDPOINT"
 
-	awsEc2MetadataDisabled = "AWS_EC2_METADATA_DISABLED"
+	awsEc2MetadataDisabled         = "AWS_EC2_METADATA_DISABLED"
+	awsEc2MetadataV1DisabledEnvVar = "AWS_EC2_METADATA_V1_DISABLED"
+
+	awsS3DisableMultiRegionAccessPointEnvVar = "AWS_S3_DISABLE_MULTIREGION_ACCESS_POINTS"
+
+	awsUseDualStackEndpoint = "AWS_USE_DUALSTACK_ENDPOINT"
+
+	awsUseFIPSEndpoint = "AWS_USE_FIPS_ENDPOINT"
+
+	awsDefaultMode = "AWS_DEFAULTS_MODE"
+
+	awsRetryMaxAttempts = "AWS_MAX_ATTEMPTS"
+	awsRetryMode        = "AWS_RETRY_MODE"
+	awsSdkAppID         = "AWS_SDK_UA_APP_ID"
+
+	awsIgnoreConfiguredEndpoints = "AWS_IGNORE_CONFIGURED_ENDPOINT_URLS"
+	awsEndpointURL               = "AWS_ENDPOINT_URL"
+
+	awsDisableRequestCompression      = "AWS_DISABLE_REQUEST_COMPRESSION"
+	awsRequestMinCompressionSizeBytes = "AWS_REQUEST_MIN_COMPRESSION_SIZE_BYTES"
+
+	awsS3DisableExpressSessionAuthEnv = "AWS_S3_DISABLE_EXPRESS_SESSION_AUTH"
+
+	awsAccountIDEnv             = "AWS_ACCOUNT_ID"
+	awsAccountIDEndpointModeEnv = "AWS_ACCOUNT_ID_ENDPOINT_MODE"
+
+	awsRequestChecksumCalculation = "AWS_REQUEST_CHECKSUM_CALCULATION"
+	awsResponseChecksumValidation = "AWS_RESPONSE_CHECKSUM_VALIDATION"
 )
 
 var (
@@ -193,6 +222,11 @@ type EnvConfig struct {
 	// AWS_EC2_METADATA_DISABLED=true
 	EC2IMDSClientEnableState imds.ClientEnableState
 
+	// Specifies if EC2 IMDSv1 fallback is disabled.
+	//
+	// AWS_EC2_METADATA_V1_DISABLED=true
+	EC2IMDSv1Disabled *bool
+
 	// Specifies the EC2 Instance Metadata Service default endpoint selection mode (IPv4 or IPv6)
 	//
 	// AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE=IPv6
@@ -202,6 +236,75 @@ type EnvConfig struct {
 	//
 	// AWS_EC2_METADATA_SERVICE_ENDPOINT=http://fd00:ec2::254
 	EC2IMDSEndpoint string
+
+	// Specifies if the S3 service should disable multi-region access points
+	// support.
+	//
+	// AWS_S3_DISABLE_MULTIREGION_ACCESS_POINTS=true
+	S3DisableMultiRegionAccessPoints *bool
+
+	// Specifies that SDK clients must resolve a dual-stack endpoint for
+	// services.
+	//
+	// AWS_USE_DUALSTACK_ENDPOINT=true
+	UseDualStackEndpoint aws.DualStackEndpointState
+
+	// Specifies that SDK clients must resolve a FIPS endpoint for
+	// services.
+	//
+	// AWS_USE_FIPS_ENDPOINT=true
+	UseFIPSEndpoint aws.FIPSEndpointState
+
+	// Specifies the SDK Defaults Mode used by services.
+	//
+	// AWS_DEFAULTS_MODE=standard
+	DefaultsMode aws.DefaultsMode
+
+	// Specifies the maximum number attempts an API client will call an
+	// operation that fails with a retryable error.
+	//
+	// AWS_MAX_ATTEMPTS=3
+	RetryMaxAttempts int
+
+	// Specifies the retry model the API client will be created with.
+	//
+	// aws_retry_mode=standard
+	RetryMode aws.RetryMode
+
+	// aws sdk app ID that can be added to user agent header string
+	AppID string
+
+	// Flag used to disable configured endpoints.
+	IgnoreConfiguredEndpoints *bool
+
+	// Value to contain configured endpoints to be propagated to
+	// corresponding endpoint resolution field.
+	BaseEndpoint string
+
+	// determine if request compression is allowed, default to false
+	// retrieved from env var AWS_DISABLE_REQUEST_COMPRESSION
+	DisableRequestCompression *bool
+
+	// inclusive threshold request body size to trigger compression,
+	// default to 10240 and must be within 0 and 10485760 bytes inclusive
+	// retrieved from env var AWS_REQUEST_MIN_COMPRESSION_SIZE_BYTES
+	RequestMinCompressSizeBytes *int64
+
+	// Whether S3Express auth is disabled.
+	//
+	// This will NOT prevent requests from being made to S3Express buckets, it
+	// will only bypass the modified endpoint routing and signing behaviors
+	// associated with the feature.
+	S3DisableExpressAuth *bool
+
+	// Indicates whether account ID will be required/ignored in endpoint2.0 routing
+	AccountIDEndpointMode aws.AccountIDEndpointMode
+
+	// Indicates whether request checksum should be calculated
+	RequestChecksumCalculation aws.RequestChecksumCalculation
+
+	// Indicates whether response checksum should be validated
+	ResponseChecksumValidation aws.ResponseChecksumValidation
 }
 
 // loadEnvConfig reads configuration values from the OS's environment variables.
@@ -221,6 +324,7 @@ func NewEnvConfig() (EnvConfig, error) {
 	setStringFromEnvVal(&creds.AccessKeyID, credAccessEnvKeys)
 	setStringFromEnvVal(&creds.SecretAccessKey, credSecretEnvKeys)
 	if creds.HasKeys() {
+		creds.AccountID = os.Getenv(awsAccountIDEnv)
 		creds.SessionToken = os.Getenv(awsSessionTokenEnvVar)
 		cfg.Credentials = creds
 	}
@@ -242,6 +346,15 @@ func NewEnvConfig() (EnvConfig, error) {
 	cfg.RoleARN = os.Getenv(awsRoleARNEnvVar)
 	cfg.RoleSessionName = os.Getenv(awsRoleSessionNameEnvVar)
 
+	cfg.AppID = os.Getenv(awsSdkAppID)
+
+	if err := setBoolPtrFromEnvVal(&cfg.DisableRequestCompression, []string{awsDisableRequestCompression}); err != nil {
+		return cfg, err
+	}
+	if err := setInt64PtrFromEnvVal(&cfg.RequestMinCompressSizeBytes, []string{awsRequestMinCompressionSizeBytes}, smithyrequestcompression.MaxRequestMinCompressSizeBytes); err != nil {
+		return cfg, err
+	}
+
 	if err := setEndpointDiscoveryTypeFromEnvVal(&cfg.EnableEndpointDiscovery, []string{awsEnableEndpointDiscoveryEnvVar}); err != nil {
 		return cfg, err
 	}
@@ -255,8 +368,110 @@ func NewEnvConfig() (EnvConfig, error) {
 		return cfg, err
 	}
 	cfg.EC2IMDSEndpoint = os.Getenv(awsEc2MetadataServiceEndpointEnvVar)
+	if err := setBoolPtrFromEnvVal(&cfg.EC2IMDSv1Disabled, []string{awsEc2MetadataV1DisabledEnvVar}); err != nil {
+		return cfg, err
+	}
+
+	if err := setBoolPtrFromEnvVal(&cfg.S3DisableMultiRegionAccessPoints, []string{awsS3DisableMultiRegionAccessPointEnvVar}); err != nil {
+		return cfg, err
+	}
+
+	if err := setUseDualStackEndpointFromEnvVal(&cfg.UseDualStackEndpoint, []string{awsUseDualStackEndpoint}); err != nil {
+		return cfg, err
+	}
+
+	if err := setUseFIPSEndpointFromEnvVal(&cfg.UseFIPSEndpoint, []string{awsUseFIPSEndpoint}); err != nil {
+		return cfg, err
+	}
+
+	if err := setDefaultsModeFromEnvVal(&cfg.DefaultsMode, []string{awsDefaultMode}); err != nil {
+		return cfg, err
+	}
+
+	if err := setIntFromEnvVal(&cfg.RetryMaxAttempts, []string{awsRetryMaxAttempts}); err != nil {
+		return cfg, err
+	}
+	if err := setRetryModeFromEnvVal(&cfg.RetryMode, []string{awsRetryMode}); err != nil {
+		return cfg, err
+	}
+
+	setStringFromEnvVal(&cfg.BaseEndpoint, []string{awsEndpointURL})
+
+	if err := setBoolPtrFromEnvVal(&cfg.IgnoreConfiguredEndpoints, []string{awsIgnoreConfiguredEndpoints}); err != nil {
+		return cfg, err
+	}
+
+	if err := setBoolPtrFromEnvVal(&cfg.S3DisableExpressAuth, []string{awsS3DisableExpressSessionAuthEnv}); err != nil {
+		return cfg, err
+	}
+
+	if err := setAIDEndPointModeFromEnvVal(&cfg.AccountIDEndpointMode, []string{awsAccountIDEndpointModeEnv}); err != nil {
+		return cfg, err
+	}
+
+	if err := setRequestChecksumCalculationFromEnvVal(&cfg.RequestChecksumCalculation, []string{awsRequestChecksumCalculation}); err != nil {
+		return cfg, err
+	}
+	if err := setResponseChecksumValidationFromEnvVal(&cfg.ResponseChecksumValidation, []string{awsResponseChecksumValidation}); err != nil {
+		return cfg, err
+	}
 
 	return cfg, nil
+}
+
+func (c EnvConfig) getDefaultsMode(ctx context.Context) (aws.DefaultsMode, bool, error) {
+	if len(c.DefaultsMode) == 0 {
+		return "", false, nil
+	}
+	return c.DefaultsMode, true, nil
+}
+
+func (c EnvConfig) getAppID(context.Context) (string, bool, error) {
+	return c.AppID, len(c.AppID) > 0, nil
+}
+
+func (c EnvConfig) getDisableRequestCompression(context.Context) (bool, bool, error) {
+	if c.DisableRequestCompression == nil {
+		return false, false, nil
+	}
+	return *c.DisableRequestCompression, true, nil
+}
+
+func (c EnvConfig) getRequestMinCompressSizeBytes(context.Context) (int64, bool, error) {
+	if c.RequestMinCompressSizeBytes == nil {
+		return 0, false, nil
+	}
+	return *c.RequestMinCompressSizeBytes, true, nil
+}
+
+func (c EnvConfig) getAccountIDEndpointMode(context.Context) (aws.AccountIDEndpointMode, bool, error) {
+	return c.AccountIDEndpointMode, len(c.AccountIDEndpointMode) > 0, nil
+}
+
+func (c EnvConfig) getRequestChecksumCalculation(context.Context) (aws.RequestChecksumCalculation, bool, error) {
+	return c.RequestChecksumCalculation, c.RequestChecksumCalculation > 0, nil
+}
+
+func (c EnvConfig) getResponseChecksumValidation(context.Context) (aws.ResponseChecksumValidation, bool, error) {
+	return c.ResponseChecksumValidation, c.ResponseChecksumValidation > 0, nil
+}
+
+// GetRetryMaxAttempts returns the value of AWS_MAX_ATTEMPTS if was specified,
+// and not 0.
+func (c EnvConfig) GetRetryMaxAttempts(ctx context.Context) (int, bool, error) {
+	if c.RetryMaxAttempts == 0 {
+		return 0, false, nil
+	}
+	return c.RetryMaxAttempts, true, nil
+}
+
+// GetRetryMode returns the RetryMode of AWS_RETRY_MODE if was specified, and a
+// valid value.
+func (c EnvConfig) GetRetryMode(ctx context.Context) (aws.RetryMode, bool, error) {
+	if len(c.RetryMode) == 0 {
+		return "", false, nil
+	}
+	return c.RetryMode, true, nil
 }
 
 func setEC2IMDSClientEnableState(state *imds.ClientEnableState, keys []string) {
@@ -277,6 +492,31 @@ func setEC2IMDSClientEnableState(state *imds.ClientEnableState, keys []string) {
 	}
 }
 
+func setDefaultsModeFromEnvVal(mode *aws.DefaultsMode, keys []string) error {
+	for _, k := range keys {
+		if value := os.Getenv(k); len(value) > 0 {
+			if ok := mode.SetFromString(value); !ok {
+				return fmt.Errorf("invalid %s value: %s", k, value)
+			}
+			break
+		}
+	}
+	return nil
+}
+
+func setRetryModeFromEnvVal(mode *aws.RetryMode, keys []string) (err error) {
+	for _, k := range keys {
+		if value := os.Getenv(k); len(value) > 0 {
+			*mode, err = aws.ParseRetryMode(value)
+			if err != nil {
+				return fmt.Errorf("invalid %s value, %w", k, err)
+			}
+			break
+		}
+	}
+	return nil
+}
+
 func setEC2IMDSEndpointMode(mode *imds.EndpointModeState, keys []string) error {
 	for _, k := range keys {
 		value := os.Getenv(k)
@@ -286,6 +526,67 @@ func setEC2IMDSEndpointMode(mode *imds.EndpointModeState, keys []string) error {
 		if err := mode.SetFromString(value); err != nil {
 			return fmt.Errorf("invalid value for environment variable, %s=%s, %v", k, value, err)
 		}
+	}
+	return nil
+}
+
+func setAIDEndPointModeFromEnvVal(m *aws.AccountIDEndpointMode, keys []string) error {
+	for _, k := range keys {
+		value := os.Getenv(k)
+		if len(value) == 0 {
+			continue
+		}
+
+		switch value {
+		case "preferred":
+			*m = aws.AccountIDEndpointModePreferred
+		case "required":
+			*m = aws.AccountIDEndpointModeRequired
+		case "disabled":
+			*m = aws.AccountIDEndpointModeDisabled
+		default:
+			return fmt.Errorf("invalid value for environment variable, %s=%s, must be preferred/required/disabled", k, value)
+		}
+		break
+	}
+	return nil
+}
+
+func setRequestChecksumCalculationFromEnvVal(m *aws.RequestChecksumCalculation, keys []string) error {
+	for _, k := range keys {
+		value := os.Getenv(k)
+		if len(value) == 0 {
+			continue
+		}
+
+		switch strings.ToLower(value) {
+		case checksumWhenSupported:
+			*m = aws.RequestChecksumCalculationWhenSupported
+		case checksumWhenRequired:
+			*m = aws.RequestChecksumCalculationWhenRequired
+		default:
+			return fmt.Errorf("invalid value for environment variable, %s=%s, must be when_supported/when_required", k, value)
+		}
+	}
+	return nil
+}
+
+func setResponseChecksumValidationFromEnvVal(m *aws.ResponseChecksumValidation, keys []string) error {
+	for _, k := range keys {
+		value := os.Getenv(k)
+		if len(value) == 0 {
+			continue
+		}
+
+		switch strings.ToLower(value) {
+		case checksumWhenSupported:
+			*m = aws.ResponseChecksumValidationWhenSupported
+		case checksumWhenRequired:
+			*m = aws.ResponseChecksumValidationWhenRequired
+		default:
+			return fmt.Errorf("invalid value for environment variable, %s=%s, must be when_supported/when_required", k, value)
+		}
+
 	}
 	return nil
 }
@@ -353,6 +654,34 @@ func (c EnvConfig) getCustomCABundle(context.Context) (io.Reader, bool, error) {
 	return bytes.NewReader(b), true, nil
 }
 
+// GetIgnoreConfiguredEndpoints is used in knowing when to disable configured
+// endpoints feature.
+func (c EnvConfig) GetIgnoreConfiguredEndpoints(context.Context) (bool, bool, error) {
+	if c.IgnoreConfiguredEndpoints == nil {
+		return false, false, nil
+	}
+
+	return *c.IgnoreConfiguredEndpoints, true, nil
+}
+
+func (c EnvConfig) getBaseEndpoint(context.Context) (string, bool, error) {
+	return c.BaseEndpoint, len(c.BaseEndpoint) > 0, nil
+}
+
+// GetServiceBaseEndpoint is used to retrieve a normalized SDK ID for use
+// with configured endpoints.
+func (c EnvConfig) GetServiceBaseEndpoint(ctx context.Context, sdkID string) (string, bool, error) {
+	if endpt := os.Getenv(fmt.Sprintf("%s_%s", awsEndpointURL, normalizeEnv(sdkID))); endpt != "" {
+		return endpt, true, nil
+	}
+	return "", false, nil
+}
+
+func normalizeEnv(sdkID string) string {
+	upper := strings.ToUpper(sdkID)
+	return strings.ReplaceAll(upper, " ", "_")
+}
+
 // GetS3UseARNRegion returns whether to allow ARNs to direct the region
 // the S3 client's requests are sent to.
 func (c EnvConfig) GetS3UseARNRegion(ctx context.Context) (value, ok bool, err error) {
@@ -363,6 +692,36 @@ func (c EnvConfig) GetS3UseARNRegion(ctx context.Context) (value, ok bool, err e
 	return *c.S3UseARNRegion, true, nil
 }
 
+// GetS3DisableMultiRegionAccessPoints returns whether to disable multi-region access point
+// support for the S3 client.
+func (c EnvConfig) GetS3DisableMultiRegionAccessPoints(ctx context.Context) (value, ok bool, err error) {
+	if c.S3DisableMultiRegionAccessPoints == nil {
+		return false, false, nil
+	}
+
+	return *c.S3DisableMultiRegionAccessPoints, true, nil
+}
+
+// GetUseDualStackEndpoint returns whether the service's dual-stack endpoint should be
+// used for requests.
+func (c EnvConfig) GetUseDualStackEndpoint(ctx context.Context) (value aws.DualStackEndpointState, found bool, err error) {
+	if c.UseDualStackEndpoint == aws.DualStackEndpointStateUnset {
+		return aws.DualStackEndpointStateUnset, false, nil
+	}
+
+	return c.UseDualStackEndpoint, true, nil
+}
+
+// GetUseFIPSEndpoint returns whether the service's FIPS endpoint should be
+// used for requests.
+func (c EnvConfig) GetUseFIPSEndpoint(ctx context.Context) (value aws.FIPSEndpointState, found bool, err error) {
+	if c.UseFIPSEndpoint == aws.FIPSEndpointStateUnset {
+		return aws.FIPSEndpointStateUnset, false, nil
+	}
+
+	return c.UseFIPSEndpoint, true, nil
+}
+
 func setStringFromEnvVal(dst *string, keys []string) {
 	for _, k := range keys {
 		if v := os.Getenv(k); len(v) > 0 {
@@ -370,6 +729,21 @@ func setStringFromEnvVal(dst *string, keys []string) {
 			break
 		}
 	}
+}
+
+func setIntFromEnvVal(dst *int, keys []string) error {
+	for _, k := range keys {
+		if v := os.Getenv(k); len(v) > 0 {
+			i, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid value %s=%s, %w", k, v, err)
+			}
+			*dst = int(i)
+			break
+		}
+	}
+
+	return nil
 }
 
 func setBoolPtrFromEnvVal(dst **bool, keys []string) error {
@@ -399,6 +773,30 @@ func setBoolPtrFromEnvVal(dst **bool, keys []string) error {
 	return nil
 }
 
+func setInt64PtrFromEnvVal(dst **int64, keys []string, max int64) error {
+	for _, k := range keys {
+		value := os.Getenv(k)
+		if len(value) == 0 {
+			continue
+		}
+
+		v, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid value for env var, %s=%s, need int64", k, value)
+		} else if v < 0 || v > max {
+			return fmt.Errorf("invalid range for env var min request compression size bytes %q, must be within 0 and 10485760 inclusively", v)
+		}
+		if *dst == nil {
+			*dst = new(int64)
+		}
+
+		**dst = v
+		break
+	}
+
+	return nil
+}
+
 func setEndpointDiscoveryTypeFromEnvVal(dst *aws.EndpointDiscoveryEnableState, keys []string) error {
 	for _, k := range keys {
 		value := os.Getenv(k)
@@ -416,6 +814,48 @@ func setEndpointDiscoveryTypeFromEnvVal(dst *aws.EndpointDiscoveryEnableState, k
 		default:
 			return fmt.Errorf(
 				"invalid value for environment variable, %s=%s, need true, false or auto",
+				k, value)
+		}
+	}
+	return nil
+}
+
+func setUseDualStackEndpointFromEnvVal(dst *aws.DualStackEndpointState, keys []string) error {
+	for _, k := range keys {
+		value := os.Getenv(k)
+		if len(value) == 0 {
+			continue // skip if empty
+		}
+
+		switch {
+		case strings.EqualFold(value, "true"):
+			*dst = aws.DualStackEndpointStateEnabled
+		case strings.EqualFold(value, "false"):
+			*dst = aws.DualStackEndpointStateDisabled
+		default:
+			return fmt.Errorf(
+				"invalid value for environment variable, %s=%s, need true, false",
+				k, value)
+		}
+	}
+	return nil
+}
+
+func setUseFIPSEndpointFromEnvVal(dst *aws.FIPSEndpointState, keys []string) error {
+	for _, k := range keys {
+		value := os.Getenv(k)
+		if len(value) == 0 {
+			continue // skip if empty
+		}
+
+		switch {
+		case strings.EqualFold(value, "true"):
+			*dst = aws.FIPSEndpointStateEnabled
+		case strings.EqualFold(value, "false"):
+			*dst = aws.FIPSEndpointStateDisabled
+		default:
+			return fmt.Errorf(
+				"invalid value for environment variable, %s=%s, need true, false",
 				k, value)
 		}
 	}
@@ -456,4 +896,24 @@ func (c EnvConfig) GetEC2IMDSEndpoint() (string, bool, error) {
 	}
 
 	return c.EC2IMDSEndpoint, true, nil
+}
+
+// GetEC2IMDSV1FallbackDisabled implements an EC2IMDSV1FallbackDisabled option
+// resolver interface.
+func (c EnvConfig) GetEC2IMDSV1FallbackDisabled() (bool, bool) {
+	if c.EC2IMDSv1Disabled == nil {
+		return false, false
+	}
+
+	return *c.EC2IMDSv1Disabled, true
+}
+
+// GetS3DisableExpressAuth returns the configured value for
+// [EnvConfig.S3DisableExpressAuth].
+func (c EnvConfig) GetS3DisableExpressAuth() (value, ok bool) {
+	if c.S3DisableExpressAuth == nil {
+		return false, false
+	}
+
+	return *c.S3DisableExpressAuth, true
 }
