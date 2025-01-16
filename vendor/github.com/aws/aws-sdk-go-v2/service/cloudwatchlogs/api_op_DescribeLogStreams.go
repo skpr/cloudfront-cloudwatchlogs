@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -14,8 +13,20 @@ import (
 
 // Lists the log streams for the specified log group. You can list all the log
 // streams or filter the results by prefix. You can also control how the results
-// are ordered. This operation has a limit of five transactions per second, after
-// which transactions are throttled.
+// are ordered.
+//
+// You can specify the log group to search by using either logGroupIdentifier or
+// logGroupName . You must include one of these two parameters, but you can't
+// include both.
+//
+// This operation has a limit of five transactions per second, after which
+// transactions are throttled.
+//
+// If you are using CloudWatch cross-account observability, you can use this
+// operation in a monitoring account and view data from the linked source accounts.
+// For more information, see [CloudWatch cross-account observability].
+//
+// [CloudWatch cross-account observability]: https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Unified-Cross-Account.html
 func (c *Client) DescribeLogStreams(ctx context.Context, params *DescribeLogStreamsInput, optFns ...func(*Options)) (*DescribeLogStreamsOutput, error) {
 	if params == nil {
 		params = &DescribeLogStreamsInput{}
@@ -33,11 +44,6 @@ func (c *Client) DescribeLogStreams(ctx context.Context, params *DescribeLogStre
 
 type DescribeLogStreamsInput struct {
 
-	// The name of the log group.
-	//
-	// This member is required.
-	LogGroupName *string
-
 	// If the value is true, results are returned in descending order. If the value is
 	// to false, results are returned in ascending order. The default value is false.
 	Descending *bool
@@ -46,23 +52,39 @@ type DescribeLogStreamsInput struct {
 	// is up to 50 items.
 	Limit *int32
 
-	// The prefix to match. If orderBy is LastEventTime, you cannot specify this
-	// parameter.
+	// Specify either the name or ARN of the log group to view. If the log group is in
+	// a source account and you are using a monitoring account, you must use the log
+	// group ARN.
+	//
+	// You must include either logGroupIdentifier or logGroupName , but not both.
+	LogGroupIdentifier *string
+
+	// The name of the log group.
+	//
+	// You must include either logGroupIdentifier or logGroupName , but not both.
+	LogGroupName *string
+
+	// The prefix to match.
+	//
+	// If orderBy is LastEventTime , you cannot specify this parameter.
 	LogStreamNamePrefix *string
 
 	// The token for the next set of items to return. (You received this token from a
 	// previous call.)
 	NextToken *string
 
-	// If the value is LogStreamName, the results are ordered by log stream name. If
-	// the value is LastEventTime, the results are ordered by the event time. The
-	// default value is LogStreamName. If you order the results by event time, you
-	// cannot specify the logStreamNamePrefix parameter. lastEventTimestamp represents
-	// the time of the most recent log event in the log stream in CloudWatch Logs. This
-	// number is expressed as the number of milliseconds after Jan 1, 1970 00:00:00
-	// UTC. lastEventTimestamp updates on an eventual consistency basis. It typically
-	// updates in less than an hour from ingestion, but in rare situations might take
-	// longer.
+	// If the value is LogStreamName , the results are ordered by log stream name. If
+	// the value is LastEventTime , the results are ordered by the event time. The
+	// default value is LogStreamName .
+	//
+	// If you order the results by event time, you cannot specify the
+	// logStreamNamePrefix parameter.
+	//
+	// lastEventTimestamp represents the time of the most recent log event in the log
+	// stream in CloudWatch Logs. This number is expressed as the number of
+	// milliseconds after Jan 1, 1970 00:00:00 UTC . lastEventTimestamp updates on an
+	// eventual consistency basis. It typically updates in less than an hour from
+	// ingestion, but in rare situations might take longer.
 	OrderBy types.OrderBy
 
 	noSmithyDocumentSerde
@@ -83,6 +105,9 @@ type DescribeLogStreamsOutput struct {
 }
 
 func (c *Client) addOperationDescribeLogStreamsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpDescribeLogStreams{}, middleware.After)
 	if err != nil {
 		return err
@@ -91,34 +116,41 @@ func (c *Client) addOperationDescribeLogStreamsMiddlewares(stack *middleware.Sta
 	if err != nil {
 		return err
 	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeLogStreams"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
+		return err
+	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
+	if err = addSpanRetryLoop(stack, options); err != nil {
 		return err
 	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
@@ -127,10 +159,19 @@ func (c *Client) addOperationDescribeLogStreamsMiddlewares(stack *middleware.Sta
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
-	if err = addOpDescribeLogStreamsValidationMiddleware(stack); err != nil {
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addTimeOffsetBuild(stack, c); err != nil {
+		return err
+	}
+	if err = addUserAgentRetryMode(stack, options); err != nil {
 		return err
 	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeLogStreams(options.Region), middleware.Before); err != nil {
+		return err
+	}
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -142,16 +183,23 @@ func (c *Client) addOperationDescribeLogStreamsMiddlewares(stack *middleware.Sta
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
+		return err
+	}
 	return nil
 }
-
-// DescribeLogStreamsAPIClient is a client that implements the DescribeLogStreams
-// operation.
-type DescribeLogStreamsAPIClient interface {
-	DescribeLogStreams(context.Context, *DescribeLogStreamsInput, ...func(*Options)) (*DescribeLogStreamsOutput, error)
-}
-
-var _ DescribeLogStreamsAPIClient = (*Client)(nil)
 
 // DescribeLogStreamsPaginatorOptions is the paginator options for
 // DescribeLogStreams
@@ -194,12 +242,13 @@ func NewDescribeLogStreamsPaginator(client DescribeLogStreamsAPIClient, params *
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeLogStreamsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeLogStreams page.
@@ -217,6 +266,9 @@ func (p *DescribeLogStreamsPaginator) NextPage(ctx context.Context, optFns ...fu
 	}
 	params.Limit = limit
 
+	optFns = append([]func(*Options){
+		addIsPaginatorUserAgent,
+	}, optFns...)
 	result, err := p.client.DescribeLogStreams(ctx, &params, optFns...)
 	if err != nil {
 		return nil, err
@@ -226,18 +278,28 @@ func (p *DescribeLogStreamsPaginator) NextPage(ctx context.Context, optFns ...fu
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 
 	return result, nil
 }
 
+// DescribeLogStreamsAPIClient is a client that implements the DescribeLogStreams
+// operation.
+type DescribeLogStreamsAPIClient interface {
+	DescribeLogStreams(context.Context, *DescribeLogStreamsInput, ...func(*Options)) (*DescribeLogStreamsOutput, error)
+}
+
+var _ DescribeLogStreamsAPIClient = (*Client)(nil)
+
 func newServiceMetadataMiddleware_opDescribeLogStreams(region string) *awsmiddleware.RegisterServiceMetadata {
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "logs",
 		OperationName: "DescribeLogStreams",
 	}
 }

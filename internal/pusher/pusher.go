@@ -3,13 +3,14 @@ package pusher
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	awstypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
-	"github.com/prometheus/common/log"
 
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/types"
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/utils"
@@ -19,7 +20,7 @@ import (
 // @TODO convert into lib reused by fluentbit-cloudwatchlogs
 type BatchLogPusher struct {
 	// log for logging.
-	log log.Logger
+	log *slog.Logger
 	// BatchLogPusher for interacting with CloudWatch Logs.
 	cwLogsClient types.CloudwatchLogsInterface
 	// Amount of events to keep before flushing.
@@ -33,7 +34,7 @@ type BatchLogPusher struct {
 }
 
 // NewBatchLogPusher creates a new batch log pusher.
-func NewBatchLogPusher(ctx context.Context, logger log.Logger, cwLogsClient types.CloudwatchLogsInterface, group, stream string, batchSize int) *BatchLogPusher {
+func NewBatchLogPusher(ctx context.Context, logger *slog.Logger, cwLogsClient types.CloudwatchLogsInterface, group, stream string, batchSize int) *BatchLogPusher {
 	pusher := &BatchLogPusher{
 		log: logger,
 		input: &cloudwatchlogs.PutLogEventsInput{
@@ -74,7 +75,7 @@ func (p *BatchLogPusher) Flush(ctx context.Context) error {
 	}
 
 	payloadSize := p.calculatePayloadSize()
-	p.log.Infof("Pushing %v log events with payload of %s", len(p.input.LogEvents), utils.ByteCountBinary(payloadSize))
+	p.log.Info(fmt.Sprintf("Pushing %v log events with payload of %s", len(p.input.LogEvents), utils.ByteCountBinary(payloadSize)))
 
 	// Sort events chronologically.
 	p.sortEvents()

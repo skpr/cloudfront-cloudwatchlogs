@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/prometheus/common/log"
 
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/handler"
 )
@@ -42,7 +42,8 @@ func HandleEvents(ctx context.Context, event events.SNSEvent) error {
 		// https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/retries-timeouts
 		options.Retryer = retry.AddWithMaxAttempts(options.Retryer, 0)
 	})
-	logger := log.NewLogger(os.Stderr)
+
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 
 	batchSize, err := getBatchSize()
 	if err != nil {

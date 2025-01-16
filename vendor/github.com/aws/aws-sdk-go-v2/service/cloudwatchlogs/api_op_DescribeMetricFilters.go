@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -32,8 +31,8 @@ func (c *Client) DescribeMetricFilters(ctx context.Context, params *DescribeMetr
 
 type DescribeMetricFiltersInput struct {
 
-	// The prefix to match. CloudWatch Logs uses the value you set here only if you
-	// also include the logGroupName parameter in your request.
+	// The prefix to match. CloudWatch Logs uses the value that you set here only if
+	// you also include the logGroupName parameter in your request.
 	FilterNamePrefix *string
 
 	// The maximum number of items returned. If you don't specify a value, the default
@@ -48,8 +47,9 @@ type DescribeMetricFiltersInput struct {
 	// metricNamespace parameter.
 	MetricName *string
 
-	// Filters results to include only those in the specified namespace. If you include
-	// this parameter in your request, you must also include the metricName parameter.
+	// Filters results to include only those in the specified namespace. If you
+	// include this parameter in your request, you must also include the metricName
+	// parameter.
 	MetricNamespace *string
 
 	// The token for the next set of items to return. (You received this token from a
@@ -74,6 +74,9 @@ type DescribeMetricFiltersOutput struct {
 }
 
 func (c *Client) addOperationDescribeMetricFiltersMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpDescribeMetricFilters{}, middleware.After)
 	if err != nil {
 		return err
@@ -82,34 +85,41 @@ func (c *Client) addOperationDescribeMetricFiltersMiddlewares(stack *middleware.
 	if err != nil {
 		return err
 	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeMetricFilters"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
+		return err
+	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
+	if err = addSpanRetryLoop(stack, options); err != nil {
 		return err
 	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
@@ -118,7 +128,19 @@ func (c *Client) addOperationDescribeMetricFiltersMiddlewares(stack *middleware.
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addTimeOffsetBuild(stack, c); err != nil {
+		return err
+	}
+	if err = addUserAgentRetryMode(stack, options); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeMetricFilters(options.Region), middleware.Before); err != nil {
+		return err
+	}
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -130,16 +152,23 @@ func (c *Client) addOperationDescribeMetricFiltersMiddlewares(stack *middleware.
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
+		return err
+	}
 	return nil
 }
-
-// DescribeMetricFiltersAPIClient is a client that implements the
-// DescribeMetricFilters operation.
-type DescribeMetricFiltersAPIClient interface {
-	DescribeMetricFilters(context.Context, *DescribeMetricFiltersInput, ...func(*Options)) (*DescribeMetricFiltersOutput, error)
-}
-
-var _ DescribeMetricFiltersAPIClient = (*Client)(nil)
 
 // DescribeMetricFiltersPaginatorOptions is the paginator options for
 // DescribeMetricFilters
@@ -182,12 +211,13 @@ func NewDescribeMetricFiltersPaginator(client DescribeMetricFiltersAPIClient, pa
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeMetricFiltersPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeMetricFilters page.
@@ -205,6 +235,9 @@ func (p *DescribeMetricFiltersPaginator) NextPage(ctx context.Context, optFns ..
 	}
 	params.Limit = limit
 
+	optFns = append([]func(*Options){
+		addIsPaginatorUserAgent,
+	}, optFns...)
 	result, err := p.client.DescribeMetricFilters(ctx, &params, optFns...)
 	if err != nil {
 		return nil, err
@@ -214,18 +247,28 @@ func (p *DescribeMetricFiltersPaginator) NextPage(ctx context.Context, optFns ..
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 
 	return result, nil
 }
 
+// DescribeMetricFiltersAPIClient is a client that implements the
+// DescribeMetricFilters operation.
+type DescribeMetricFiltersAPIClient interface {
+	DescribeMetricFilters(context.Context, *DescribeMetricFiltersInput, ...func(*Options)) (*DescribeMetricFiltersOutput, error)
+}
+
+var _ DescribeMetricFiltersAPIClient = (*Client)(nil)
+
 func newServiceMetadataMiddleware_opDescribeMetricFilters(region string) *awsmiddleware.RegisterServiceMetadata {
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "logs",
 		OperationName: "DescribeMetricFilters",
 	}
 }

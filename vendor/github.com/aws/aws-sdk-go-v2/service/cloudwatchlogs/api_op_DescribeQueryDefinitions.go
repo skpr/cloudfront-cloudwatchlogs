@@ -4,17 +4,19 @@ package cloudwatchlogs
 
 import (
 	"context"
+	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 // This operation returns a paginated list of your saved CloudWatch Logs Insights
-// query definitions. You can use the queryDefinitionNamePrefix parameter to limit
-// the results to only the query definitions that have names that start with a
-// certain string.
+// query definitions. You can retrieve query definitions from the current account
+// or from a source account that is linked to the current account.
+//
+// You can use the queryDefinitionNamePrefix parameter to limit the results to
+// only the query definitions that have names that start with a certain string.
 func (c *Client) DescribeQueryDefinitions(ctx context.Context, params *DescribeQueryDefinitionsInput, optFns ...func(*Options)) (*DescribeQueryDefinitionsOutput, error) {
 	if params == nil {
 		params = &DescribeQueryDefinitionsInput{}
@@ -42,6 +44,12 @@ type DescribeQueryDefinitionsInput struct {
 	// have names that start with the prefix you specify.
 	QueryDefinitionNamePrefix *string
 
+	// The query language used for this query. For more information about the query
+	// languages that CloudWatch Logs supports, see [Supported query languages].
+	//
+	// [Supported query languages]: https://docs.aws.amazon.com/AmazonCloudWatch/latest/logs/CWL_AnalyzeLogData_Languages.html
+	QueryLanguage types.QueryLanguage
+
 	noSmithyDocumentSerde
 }
 
@@ -60,6 +68,9 @@ type DescribeQueryDefinitionsOutput struct {
 }
 
 func (c *Client) addOperationDescribeQueryDefinitionsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpDescribeQueryDefinitions{}, middleware.After)
 	if err != nil {
 		return err
@@ -68,34 +79,41 @@ func (c *Client) addOperationDescribeQueryDefinitionsMiddlewares(stack *middlewa
 	if err != nil {
 		return err
 	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeQueryDefinitions"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
+		return err
+	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
+	if err = addSpanRetryLoop(stack, options); err != nil {
 		return err
 	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
@@ -104,7 +122,19 @@ func (c *Client) addOperationDescribeQueryDefinitionsMiddlewares(stack *middlewa
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addTimeOffsetBuild(stack, c); err != nil {
+		return err
+	}
+	if err = addUserAgentRetryMode(stack, options); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeQueryDefinitions(options.Region), middleware.Before); err != nil {
+		return err
+	}
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -116,6 +146,21 @@ func (c *Client) addOperationDescribeQueryDefinitionsMiddlewares(stack *middlewa
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -123,7 +168,6 @@ func newServiceMetadataMiddleware_opDescribeQueryDefinitions(region string) *aws
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "logs",
 		OperationName: "DescribeQueryDefinitions",
 	}
 }

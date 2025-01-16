@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	awsmiddleware "github.com/aws/aws-sdk-go-v2/aws/middleware"
-	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/smithy-go/middleware"
 	smithyhttp "github.com/aws/smithy-go/transport/http"
@@ -34,7 +33,7 @@ type DescribeDestinationsInput struct {
 	DestinationNamePrefix *string
 
 	// The maximum number of items returned. If you don't specify a value, the default
-	// is up to 50 items.
+	// maximum value of 50 items is used.
 	Limit *int32
 
 	// The token for the next set of items to return. (You received this token from a
@@ -59,6 +58,9 @@ type DescribeDestinationsOutput struct {
 }
 
 func (c *Client) addOperationDescribeDestinationsMiddlewares(stack *middleware.Stack, options Options) (err error) {
+	if err := stack.Serialize.Add(&setOperationInputMiddleware{}, middleware.After); err != nil {
+		return err
+	}
 	err = stack.Serialize.Add(&awsAwsjson11_serializeOpDescribeDestinations{}, middleware.After)
 	if err != nil {
 		return err
@@ -67,34 +69,41 @@ func (c *Client) addOperationDescribeDestinationsMiddlewares(stack *middleware.S
 	if err != nil {
 		return err
 	}
+	if err := addProtocolFinalizerMiddlewares(stack, options, "DescribeDestinations"); err != nil {
+		return fmt.Errorf("add protocol finalizers: %v", err)
+	}
+
+	if err = addlegacyEndpointContextSetter(stack, options); err != nil {
+		return err
+	}
 	if err = addSetLoggerMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddClientRequestIDMiddleware(stack); err != nil {
+	if err = addClientRequestID(stack); err != nil {
 		return err
 	}
-	if err = smithyhttp.AddComputeContentLengthMiddleware(stack); err != nil {
+	if err = addComputeContentLength(stack); err != nil {
 		return err
 	}
 	if err = addResolveEndpointMiddleware(stack, options); err != nil {
 		return err
 	}
-	if err = v4.AddComputePayloadSHA256Middleware(stack); err != nil {
+	if err = addComputePayloadSHA256(stack); err != nil {
 		return err
 	}
-	if err = addRetryMiddlewares(stack, options); err != nil {
+	if err = addRetry(stack, options); err != nil {
 		return err
 	}
-	if err = addHTTPSignerV4Middleware(stack, options); err != nil {
+	if err = addRawResponseToMetadata(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRawResponseToMetadata(stack); err != nil {
+	if err = addRecordResponseTiming(stack); err != nil {
 		return err
 	}
-	if err = awsmiddleware.AddRecordResponseTiming(stack); err != nil {
+	if err = addSpanRetryLoop(stack, options); err != nil {
 		return err
 	}
-	if err = addClientUserAgent(stack); err != nil {
+	if err = addClientUserAgent(stack, options); err != nil {
 		return err
 	}
 	if err = smithyhttp.AddErrorCloseResponseBodyMiddleware(stack); err != nil {
@@ -103,7 +112,19 @@ func (c *Client) addOperationDescribeDestinationsMiddlewares(stack *middleware.S
 	if err = smithyhttp.AddCloseResponseBodyMiddleware(stack); err != nil {
 		return err
 	}
+	if err = addSetLegacyContextSigningOptionsMiddleware(stack); err != nil {
+		return err
+	}
+	if err = addTimeOffsetBuild(stack, c); err != nil {
+		return err
+	}
+	if err = addUserAgentRetryMode(stack, options); err != nil {
+		return err
+	}
 	if err = stack.Initialize.Add(newServiceMetadataMiddleware_opDescribeDestinations(options.Region), middleware.Before); err != nil {
+		return err
+	}
+	if err = addRecursionDetection(stack); err != nil {
 		return err
 	}
 	if err = addRequestIDRetrieverMiddleware(stack); err != nil {
@@ -115,22 +136,29 @@ func (c *Client) addOperationDescribeDestinationsMiddlewares(stack *middleware.S
 	if err = addRequestResponseLogging(stack, options); err != nil {
 		return err
 	}
+	if err = addDisableHTTPSMiddleware(stack, options); err != nil {
+		return err
+	}
+	if err = addSpanInitializeStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanInitializeEnd(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestStart(stack); err != nil {
+		return err
+	}
+	if err = addSpanBuildRequestEnd(stack); err != nil {
+		return err
+	}
 	return nil
 }
-
-// DescribeDestinationsAPIClient is a client that implements the
-// DescribeDestinations operation.
-type DescribeDestinationsAPIClient interface {
-	DescribeDestinations(context.Context, *DescribeDestinationsInput, ...func(*Options)) (*DescribeDestinationsOutput, error)
-}
-
-var _ DescribeDestinationsAPIClient = (*Client)(nil)
 
 // DescribeDestinationsPaginatorOptions is the paginator options for
 // DescribeDestinations
 type DescribeDestinationsPaginatorOptions struct {
 	// The maximum number of items returned. If you don't specify a value, the default
-	// is up to 50 items.
+	// maximum value of 50 items is used.
 	Limit int32
 
 	// Set to true if pagination should stop if the service returns a pagination token
@@ -167,12 +195,13 @@ func NewDescribeDestinationsPaginator(client DescribeDestinationsAPIClient, para
 		client:    client,
 		params:    params,
 		firstPage: true,
+		nextToken: params.NextToken,
 	}
 }
 
 // HasMorePages returns a boolean indicating whether more pages are available
 func (p *DescribeDestinationsPaginator) HasMorePages() bool {
-	return p.firstPage || p.nextToken != nil
+	return p.firstPage || (p.nextToken != nil && len(*p.nextToken) != 0)
 }
 
 // NextPage retrieves the next DescribeDestinations page.
@@ -190,6 +219,9 @@ func (p *DescribeDestinationsPaginator) NextPage(ctx context.Context, optFns ...
 	}
 	params.Limit = limit
 
+	optFns = append([]func(*Options){
+		addIsPaginatorUserAgent,
+	}, optFns...)
 	result, err := p.client.DescribeDestinations(ctx, &params, optFns...)
 	if err != nil {
 		return nil, err
@@ -199,18 +231,28 @@ func (p *DescribeDestinationsPaginator) NextPage(ctx context.Context, optFns ...
 	prevToken := p.nextToken
 	p.nextToken = result.NextToken
 
-	if p.options.StopOnDuplicateToken && prevToken != nil && p.nextToken != nil && *prevToken == *p.nextToken {
+	if p.options.StopOnDuplicateToken &&
+		prevToken != nil &&
+		p.nextToken != nil &&
+		*prevToken == *p.nextToken {
 		p.nextToken = nil
 	}
 
 	return result, nil
 }
 
+// DescribeDestinationsAPIClient is a client that implements the
+// DescribeDestinations operation.
+type DescribeDestinationsAPIClient interface {
+	DescribeDestinations(context.Context, *DescribeDestinationsInput, ...func(*Options)) (*DescribeDestinationsOutput, error)
+}
+
+var _ DescribeDestinationsAPIClient = (*Client)(nil)
+
 func newServiceMetadataMiddleware_opDescribeDestinations(region string) *awsmiddleware.RegisterServiceMetadata {
 	return &awsmiddleware.RegisterServiceMetadata{
 		Region:        region,
 		ServiceID:     ServiceID,
-		SigningName:   "logs",
 		OperationName: "DescribeDestinations",
 	}
 }
