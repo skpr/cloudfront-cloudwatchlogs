@@ -1,0 +1,36 @@
+project_name: cloudfront-cloudwatchlogs
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cloudfront-cloudwatchlogs
+    ldflags:
+      - '-extldflags -static'
+    goos: [ linux ]
+    goarch: [ amd64, arm64 ]
+    env:
+      - CGO_ENABLED=0
+
+archives:
+- formats:
+    - zip
+  name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+
+dockers_v2:
+  - id: cloudfront-cloudwatchlogs
+    ids:
+      - cloudfront-cloudwatchlogs
+    images:
+      - ghcr.io/skpr/cloudfront-cloudwatchlogs
+    tags:
+      - "latest"
+      - "v{{ .Version }}"
+    sbom: false
+    flags:
+      - "--pull"
+
+changelog:
+  use: github-native
