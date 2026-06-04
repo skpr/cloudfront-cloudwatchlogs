@@ -19,18 +19,5 @@ archives:
     - zip
   name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
 
-dockers_v2:
-  - id: cloudfront-cloudwatchlogs
-    ids:
-      - cloudfront-cloudwatchlogs
-    images:
-      - ghcr.io/skpr/cloudfront-cloudwatchlogs
-    tags:
-      - "latest"
-      - "v{{ .Version }}"
-    sbom: false
-    flags:
-      - "--pull"
-
 changelog:
   use: github-native

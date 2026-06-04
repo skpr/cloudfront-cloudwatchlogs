@@ -20,7 +20,9 @@ func ProcessLines(gzipBytes []byte, processEvent func(event types.InputLogEvent)
 	if err != nil {
 		return fmt.Errorf("error reading gzip: %w", err)
 	}
-	defer gzipReader.Close()
+	defer func() {
+		_ = gzipReader.Close()
+	}()
 
 	scanner := bufio.NewScanner(gzipReader)
 	for scanner.Scan() {
