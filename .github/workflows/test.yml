@@ -9,10 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: 📦 Install Mise
-        run: |
-          curl https://mise.run | sh
-          mise install
+      - uses: jdx/mise-action@v4
 
       - name: lint
         run: mise test
