@@ -1,7 +1,7 @@
 package processor
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestProcessLines(t *testing.T) {
-	contents, err := ioutil.ReadFile("testdata/test-logs.gz")
+	contents, err := os.ReadFile("testdata/test-logs.gz")
 	assert.NoError(t, err)
 	processor := mock.NewProcessor()
 	err = ProcessLines(contents, processor.Process)

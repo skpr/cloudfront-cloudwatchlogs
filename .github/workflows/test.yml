@@ -7,13 +7,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: ⬇️ Git clone the repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
-      - name: 📦 Install Go
-        uses: actions/setup-go@v3
-        with:
-          go-version: '1.23'
+      - uses: jdx/mise-action@v4
 
-      - name: 🧪 Test
-        run: go test ./...
+      - name: lint
+        run: mise test
