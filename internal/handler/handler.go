@@ -8,9 +8,9 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/parser"
 	"github.com/skpr/cloudfront-cloudwatchlogs/internal/processor"
@@ -26,13 +26,13 @@ const (
 // EventHandler defines the event handler.
 type EventHandler struct {
 	log            *slog.Logger
-	downloadClient manager.DownloadAPIClient
+	downloadClient transfermanager.S3APIClient
 	cwLogsClient   *cloudwatchlogs.Client
 	batchSize      int
 }
 
 // NewEventHandler creates a new event handler.
-func NewEventHandler(log *slog.Logger, downloadClient manager.DownloadAPIClient, cwLogsClient *cloudwatchlogs.Client, batchSize int) *EventHandler {
+func NewEventHandler(log *slog.Logger, downloadClient transfermanager.S3APIClient, cwLogsClient *cloudwatchlogs.Client, batchSize int) *EventHandler {
 	return &EventHandler{
 		log:            log,
 		downloadClient: downloadClient,
@@ -46,16 +46,17 @@ func (h *EventHandler) HandleEvent(ctx context.Context, record events.S3EventRec
 	key := record.S3.Object.Key
 	bucket := record.S3.Bucket.Name
 	h.log.Info(fmt.Sprintf("Downloading logs %s from s3 bucket %s", key, bucket))
-	downloader := manager.NewDownloader(h.downloadClient)
+	downloader := transfermanager.New(h.downloadClient)
 	gzipBuff := manager.NewWriteAtBuffer([]byte{})
-	n, err := downloader.Download(ctx, gzipBuff, &s3.GetObjectInput{
-		Bucket: aws.String(bucket),
-		Key:    aws.String(key),
+	out, err := downloader.DownloadObject(ctx, &transfermanager.DownloadObjectInput{
+		Bucket:   aws.String(bucket),
+		Key:      aws.String(key),
+		WriterAt: gzipBuff,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to download %s from %s: %w", key, bucket, err)
 	}
-	h.log.Info(fmt.Sprintf("Fetched %s from %s from %s", utils.ByteCountBinary(n), key, bucket))
+	h.log.Info(fmt.Sprintf("Fetched %s from %s from %s", utils.ByteCountBinary(aws.ToInt64(out.ContentLength)), key, bucket))
 
 	h.log.Info("Creating log pusher")
 	logGroup := parser.GetLogGroupName(key)
