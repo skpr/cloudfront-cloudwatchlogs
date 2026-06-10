@@ -32,8 +32,8 @@ func TestParseDateAndMessageJson(t *testing.T) {
 	date, message, err := ParseDateAndMessageJson(line)
 	assert.Nil(t, err)
 	assert.Equal(t, expectedDate, date)
-	expectedMessage := "{\"date\":\"2026-06-10\",\"time\":\"00:03:12\",\"x-edge-location\":\"SYD62-P1\",\"sc-bytes\":14823,\"c-ip\":\"203.22.104.51\",\"cs-method\":\"GET\",\"cs(Host)\":\"d1a2b3c4d5e6f7.cloudfront.net\",\"cs-uri-stem\":\"/\",\"sc-status\":200,\"cs(Referer)\":\"-\",\"cs(User-Agent)\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36\",\"cs-uri-query\":\"-\",\"cs(Cookie)\":\"SESS8f3a2b1c=abc123xyz; has_js=1\",\"x-edge-result-type\":\"Miss\",\"x-edge-request-id\":\"gHk7Lm2NpQrStUvWxYz1A2B3C4D5E6F7\",\"x-host-header\":\"www.example.com.au\",\"cs-protocol\":\"https\",\"cs-bytes\":521,\"time-taken\":0.243,\"x-forwarded-for\":\"203.22.104.51\",\"ssl-protocol\":\"TLSv1.3\",\"ssl-cipher\":\"TLS_AES_128_GCM_SHA256\",\"x-edge-response-result-type\":\"Miss\",\"cs-protocol-version\":\"HTTP/2.0\",\"fle-status\":\"-\",\"fle-encrypted-fields\":\"-\",\"c-port\":54321,\"time-to-first-byte\":0.201,\"x-edge-detailed-result-type\":\"Miss\",\"sc-content-type\":\"text/html; charset=UTF-8\",\"sc-content-len\":14501,\"sc-range-start\":\"-\",\"sc-range-end\":\"-\",\"CloudFront-Viewer-Address\":\"203.22.104.51:54321\",\"CloudFront-Viewer-JA4-Fingerprint\":\"t13d1516h2_8daaf6152771_b0da82dd1658\"}"
-	assert.Equal(t, expectedMessage, message)
+	// For JSON the message is the same as the input.
+	assert.Equal(t, line, message)
 }
 
 func TestParseDateTime(t *testing.T) {
