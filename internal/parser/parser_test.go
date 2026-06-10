@@ -39,5 +39,5 @@ func TestParseDateAndMessageJson(t *testing.T) {
 func TestParseDateTime(t *testing.T) {
 	date, err := parseDateTime("2020-06-18", "03:38:13")
 	assert.Nil(t, err)
-	assert.Equal(t, date, time.Date(2020, 6, 18, 3, 38, 13, 0, time.UTC))
+	assert.Equal(t, time.Date(2020, 6, 18, 3, 38, 13, 0, time.UTC), date)
 }

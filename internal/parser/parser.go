@@ -15,7 +15,7 @@ type JsonLog struct {
 
 // ParseDateAndMessage parses the date and message from a log string.
 func ParseDateAndMessage(line string) (time.Time, string, error) {
-	if line[0:1] == "{" {
+	if len(line) > 0 && line[0:1] == "{" {
 		return ParseDateAndMessageJson(line)
 	}
 	return ParseDateAndMessageLegacy(line)
